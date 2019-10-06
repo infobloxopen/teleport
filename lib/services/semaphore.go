@@ -17,7 +17,7 @@ import (
 // used to implement concurrent sessions control in a distributed environment
 type Semaphores interface {
 	// TryAcquireSemaphore acquires lease with requested resources from semaphore
-	AcquireSemaphore(ctx context.Context, sem Semaphore, l SemaphoreLease) (*SemaphoreLease, error)
+	TryAcquireSemaphore(ctx context.Context, sem Semaphore, l SemaphoreLease) (*SemaphoreLease, error)
 	// KeepAliveSemaphoreLease updates semaphore lease
 	KeepAliveSemaphoreLease(ctx context.Context, l SemaphoreLease) error
 }

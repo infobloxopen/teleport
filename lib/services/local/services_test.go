@@ -166,3 +166,7 @@ func (s *ServicesSuite) TestEventsClusterConfig(c *check.C) {
 func (s *ServicesSuite) TestProxyWatcher(c *check.C) {
 	s.suite.ProxyWatcher(c)
 }
+
+func (s *ServicesSuite) TestSemaphore(c *check.C) {
+	s.suite.Semaphore(c)
+}

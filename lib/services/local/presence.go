@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Gravitational, Inc.
+Copyright 2015-2019 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -727,21 +727,21 @@ func (s *PresenceService) TryAcquireSemaphore(ctx context.Context, sem services.
 		)
 	}
 
-	for _, lease := range s.GetLeases() {
+	for _, lease := range existing.GetLeases() {
 		if lease.ID == l.ID {
 			return nil, trace.BadParameter(
 				"semaphore %v already has lease %v, use KeepAliveSemaphoreLease to renew the lease",
-				sem,
+				sem, l.ID,
 			)
 		}
 	}
 
 	existing.RemoveExpiredLeases(s.Clock().Now().UTC())
 
-	if l.Resources > existing.AcquiredResources() {
+	if l.Resources > existing.GetMaxResources()-existing.AcquiredResources() {
 		return nil, trace.LimitExceeded(
 			"lease %v can't acquire %v resources, as semaphore %v has %v already acquired",
-			l.ID, l.Resources, sem.GetName(), sem.AcquiredResources(),
+			l.ID, l.Resources, sem, sem.AcquiredResources(),
 		)
 	}
 
@@ -819,7 +819,7 @@ func (s *PresenceService) KeepAliveSemaphoreLease(ctx context.Context, l service
 	_, err = s.CompareAndSwap(ctx, *item, newItem)
 	if err != nil {
 		if trace.IsCompareFailed(err) {
-			return trace.CompareFailed("semaphore %v hase been concurrently updated, try again", existing.GetName())
+			return trace.CompareFailed("semaphore %v hase been concurrently updated, try again", sem.GetName())
 		}
 		return trace.Wrap(err)
 	}

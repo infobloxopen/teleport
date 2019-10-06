@@ -1026,6 +1026,38 @@ func (s *ServicesTestSuite) ClusterConfig(c *check.C, opts ...SuiteOption) {
 	fixtures.DeepCompare(c, clusterName, gotName)
 }
 
+// Semaphore tests semaphore operations
+func (s *ServicesTestSuite) Semaphore(c *check.C) {
+	sem, err := services.NewSemaphore("alice", services.KindUser, services.SemaphoreSpecV3{
+		MaxResources: 2,
+	})
+	lease := services.SemaphoreLease{
+		ID:        "1",
+		Resources: 1,
+	}
+	out, err := s.PresenceS.TryAcquireSemaphore(context.TODO(), sem, lease)
+	c.Assert(err, check.IsNil)
+	c.Assert(out, check.NotNil)
+
+	// lease tries to acquire too many resources
+	newLease := services.SemaphoreLease{
+		ID:        "2",
+		Resources: 2,
+	}
+	out, err = s.PresenceS.TryAcquireSemaphore(context.TODO(), sem, newLease)
+	fixtures.ExpectLimitExceeded(c, err)
+	c.Assert(out, check.IsNil)
+
+	// lease acquires enough resources
+	newLease = services.SemaphoreLease{
+		ID:        "2",
+		Resources: 1,
+	}
+	out, err = s.PresenceS.TryAcquireSemaphore(context.TODO(), sem, newLease)
+	c.Assert(err, check.IsNil)
+	c.Assert(out, check.IsNil)
+}
+
 // Events tests various events variations
 func (s *ServicesTestSuite) Events(c *check.C) {
 	testCases := []eventTest{
