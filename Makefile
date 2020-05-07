@@ -356,6 +356,7 @@ install: build
 .PHONY: image
 image: full
 	cp ./build.assets/charts/Dockerfile $(BUILDDIR)/
+	cp ./build.assets/config/teleport.yaml $(BUILDDIR)/
 	cd $(BUILDDIR) && docker build --no-cache . -t $(DOCKER_IMAGE):$(VERSION)
 	if [ -f e/Makefile ]; then $(MAKE) -C e image; fi
 
