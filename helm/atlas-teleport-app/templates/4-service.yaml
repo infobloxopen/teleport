@@ -1,0 +1,38 @@
+{{- $appName := include "teleport.name" . -}}
+{{- $ns := include "teleport.namespace" . -}}
+{{- $labels := include "teleport.labels" . -}}
+{{- range $service := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $appName }}-{{ tpl $service.name $ }}
+  namespace: {{ $ns }}
+  labels:
+{{ $labels | indent 4 }}
+ {{- if $service.annotations }}
+  annotations:
+    {{- range $key, $value := $service.annotations }}
+    {{ $key }}: {{tpl $value $ }}
+    {{- end }}  
+ {{- end }}
+spec:
+  type: {{ $service.type }}
+  {{- if $service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+  {{- range $service.loadBalancerSourceRanges }}
+  - {{ . }}
+  {{- end }}
+  {{- end }}
+  ports:
+  {{- range $key, $value := $service.ports }}
+    - name: {{ $key }}
+      {{ toYaml $value | indent 6 | trim }}
+  {{- end }}
+{{- if $service.externalTrafficPolicy }}
+  externalTrafficPolicy: "{{ $service.externalTrafficPolicy }}"
+{{- end }}
+  selector:
+    app: {{ $appName }}
+{{- end }}
+---

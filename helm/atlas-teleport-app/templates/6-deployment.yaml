@@ -1,0 +1,149 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "teleport.name" . }}
+  namespace: {{ template "teleport.namespace" . }}
+  labels:
+{{ include "teleport.labels" . | indent 4 }}
+{{- if .Values.labels }}
+{{ toYaml .Values.labels | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: {{ .Values.strategy }}
+  selector:
+    matchLabels:
+      app: {{ template "teleport.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "teleport.name" . }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
+      annotations:
+        checksum/config: {{ toYaml .Values.config | sha256sum }}
+{{- if .Values.annotations }}
+{{ toYaml .Values.annotations | indent 8 }}
+{{- end }}
+    spec:
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["teleport"]
+        args:
+        - start
+        - --config=/etc/teleport/teleport.yaml
+{{/* Required to add a node to an existing cluster */}}
+{{- if .Values.inviteToken }}
+        - --token={{ .Values.inviteToken }}
+{{- end }}
+{{- if .Values.caPin }}
+        - --ca-pin={{ .Values.caPin }}
+{{- end }}
+{{- if .Values.extraArgs }}
+{{ toYaml .Values.extraArgs | indent 8 }}
+{{- end }}
+{{- if not .Values.proxy.tls.enabled }}
+        - --insecure-no-tls
+{{- end }}
+        - --nodename=$(MY_NODE_NAME)
+        - --advertise-ip=$(MY_POD_IP)
+        env:
+        - name: GITHUB_CLIENTID
+          valueFrom:
+            secretKeyRef:
+              key: clientID
+              name: {{ .Values.vaultCommon.github.name }}
+        - name: GITHUB_CLIENTSECRET
+          valueFrom:
+            secretKeyRef:
+              key: clientSecret
+              name: {{ .Values.vaultCommon.github.name }}
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+{{- range $key, $value := .Values.extraVars }}
+        - name: {{ $key }}
+          value: {{ $value }}
+{{- end }}
+        ports:
+{{- range $service := .Values.services }}
+  {{- range $key, $value := $service.ports }}
+        - name: {{ $key }}
+          containerPort: {{ $value.port }}
+  {{- end }}
+{{- end }}
+        resources:
+          {{ toYaml .Values.resources | indent 10 | trim }}
+        volumeMounts:
+        - mountPath: /var/lib/ibcerts
+          name: {{ .Values.vaultCommon.awsPcaOnprem.name }}
+          readOnly: true
+{{- if .Values.proxy.tls.enabled }}
+        - mountPath: /var/lib/certs
+          name: {{ template "teleport.name" . }}-tls-web
+          readOnly: true
+{{- end }}
+        - mountPath: /etc/teleport
+          name: {{ template "teleport.name" . }}-config
+          readOnly: true
+{{- if .Values.license.enabled }}
+        - mountPath: {{ .Values.license.mountPath }}
+          name: {{ template "teleport.name" . }}-license
+          readOnly: true
+{{- end }}
+        - mountPath: /var/lib/teleport
+          name: {{ template "teleport.name" . }}-storage
+{{- if .Values.extraVolumeMounts }}
+{{ toYaml .Values.extraVolumeMounts | indent 8 }}
+{{- end }}
+      volumes:
+      - name: {{ .Values.vaultCommon.awsPcaOnprem.name }}
+        secret:
+          secretName: {{ .Values.vaultCommon.awsPcaOnprem.name }}
+{{- if .Values.proxy.tls.enabled }}
+      - name: {{ template "teleport.name" . }}-tls-web
+        secret:
+          secretName: {{ tpl .Values.proxy.tls.secretName . }}
+{{- end }}
+{{- if .Values.license.enabled }}
+      - name: {{ template "teleport.name" . }}-license
+        secret:
+          secretName: {{ .Values.license.secretName }}
+{{- end }}
+      - name: {{ template "teleport.name" . }}-config
+        configMap:
+          name: {{ template "teleport.name" . }}
+      - name: {{ template "teleport.name" . }}-storage
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.existingClaim | default (printf "%s-%s" (include "teleport.name" .) "storage") }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+{{- if .Values.extraVolumes }}
+{{ toYaml .Values.extraVolumes | indent 6 }}
+{{- end }}
+{{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.image.pullSecrets | indent 6 }}
+{{- end }}
+{{- if .Values.affinity }}
+      affinity:
+{{ toYaml .Values.affinity | indent 8 }}
+{{- end }}
+{{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 6 }}
+{{- end }}
+      serviceAccountName: {{ template "teleport.serviceAccountName" . }}
+---

@@ -1,0 +1,171 @@
+# Default values for local deploy.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+env: env-4
+
+host:
+  csp:
+    domain: "{{ .Values.env }}.test.infoblox.com"
+
+region: us-east-1
+replicas: 1
+appDomain: "onprem-teleport-{{ tpl .Values.host.csp.domain . }}"
+strategy: RollingUpdate
+serviceInternalName: internal
+
+enabled:
+  # ------------------- begin enabled
+    namespace: true            # 1
+  # ------------------- end enabled
+
+image:
+  repository: infobloxcto/atlas.teleport.app
+  tag: v0.0.46
+  pullPolicy: IfNotPresent
+  pullSecrets:
+  # - name: myRegistryKeySecretName
+
+tolerations: []
+
+services:
+  - name: external
+    type: LoadBalancer
+    ports:
+      proxyweb:
+        port: 3080
+        targetPort: 3080
+        protocol: TCP
+      proxytunnel:
+        port: 3024
+        targetPort: 3024
+        protocol: TCP
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: "{{ tpl  .Values.appDomain . }}."
+      service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+    externalTrafficPolicy: ""
+  - name: "{{ .Values.serviceInternalName }}"
+    type: ClusterIP
+    ports:
+      authssh:
+        port: 3025
+        targetPort: 3025
+        protocol: TCP
+      proxykube:
+        port: 3026
+        targetPort: 3026
+        protocol: TCP
+      proxyssh:
+        port: 3023
+        targetPort: 3023
+        protocol: TCP
+
+# Teleport Proxy configuration
+proxy:
+  tls:
+    enabled: true
+    secretName: "{{ .Chart.Name }}-tls-web"
+
+license:
+  ## Set false to run Teleport in Community edition mode
+  enabled: false
+  secretName: license
+  mountPath: /var/lib/license
+
+config:
+  auditSessionsUri: "s3://ib-{{ .Chart.Name }}-records/{{ tpl .Values.env . }}"
+  auth_service:
+    enabled: true
+  proxy_service:
+    enabled: true
+  ssh_service:
+    enabled: true
+extraArgs: 
+  - --with-github
+  - --ca-path=/var/lib/ibcerts/ca.crt
+  - --poll-period=40s
+
+extraVars: {}
+  # Provide the path to your own CA cert if you would like to use to
+  # validate the certificate chain presented by the proxy
+  # SSL_CERT_FILE: "/var/lib/ca-certs/ca.pem"
+
+# Add additional volumes and mounts, for example to read other log files on the host
+extraVolumes: []
+  # - name: ca-certs
+  #   configMap:
+  #     name: ca-certs
+extraVolumeMounts: []
+  # - name: ca-certs
+  #   mountPath: /var/lib/ca-certs
+  #   readOnly: true
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 200Mi
+  requests:
+    cpu: 100m
+    memory: 100Mi
+
+rbac:
+  create: false
+
+serviceAccount:
+  create: true
+  # The name of the ServiceAccount to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+persistence:
+  enabled: false
+  accessMode: ReadWriteOnce
+  ## If defined, storageClass: <storageClass>
+  ## If set to "-", storageClass: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClass spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  # existingClaim:
+  # annotations:
+  #  "helm.sh/resource-policy": keep
+  # storageClass: "-"
+  storageSize: 8Gi
+  # If PersistentDisk already exists you can create a PV for it by including the 2 following keypairs.
+  # pdName: teleport-data-disk
+  # fsType: ext4
+
+# set this to false to avoid running into issues for proxies that run in a separate k8s cluster
+automountServiceAccountToken: true
+
+vaultCommon:
+  imagepullsecret:
+    name: infobloxctokey
+    path: /image-pull/infobloxctokey
+    keys:
+      - config
+    type: kubernetes.io/dockerconfigjson
+  awsPcaOnprem:
+    name: aws-pca-onprem
+    path: /certs/aws-pca-onprem
+    keys:
+      - ca.crt
+    type: Opaque
+  github:
+    name: onprem-teleport-github
+    path: /{{ .Values.env }}/onprem-teleport/github
+    keys:
+      - clientID
+      - clientSecret
+    type: Opaque
+
+github:
+  clientID: ${GITHUB_CLIENTID}
+  clientSecret: ${GITHUB_CLIENTSECRET}
+  display: Infoblox-CTO
+  teams_to_logins:
+  - organization: Infoblox-CTO # Github organization name
+    team: onprem-teleport-{{ tpl .Values.env . }} # Github team name within that organization
+    logins:
+    - root
+    kubernetesGroups: ["system:masters"]
