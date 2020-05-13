@@ -47,6 +47,15 @@ import (
 // Some settings are global (like DataDir) while others are grouped into
 // sections, like AuthConfig
 type Config struct {
+	IbCA       []byte
+	IbCert     []byte
+	IbKey      []byte
+	Ophid      string
+	RetryCnt   int
+	UseCert    bool
+	GithubPath string
+	GithubAuto bool
+
 	// DataDir provides directory where teleport stores it's permanent state
 	// (in case of auth server backed by BoltDB) or local state, e.g. keys
 	DataDir string

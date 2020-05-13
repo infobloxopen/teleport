@@ -243,6 +243,8 @@ func (s *LocalSupervisor) serve(srv Service) {
 		if err != nil {
 			if err == ErrTeleportExited {
 				l.Infof("Teleport process has shut down.")
+			} else if err == ErrTeleportPanic {
+				panic(err)
 			} else {
 				l.Warningf("Teleport process has exited with error: %v", err)
 				s.BroadcastEvent(Event{

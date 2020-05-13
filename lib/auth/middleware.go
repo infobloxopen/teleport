@@ -18,13 +18,17 @@ package auth
 
 import (
 	"context"
+	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
+	"fmt"
 	"net"
 	"net/http"
 
 	"github.com/gravitational/teleport"
 	"github.com/gravitational/teleport/lib/defaults"
+	icli "github.com/gravitational/teleport/lib/identityclient"
 	"github.com/gravitational/teleport/lib/limiter"
 	"github.com/gravitational/teleport/lib/services"
 	"github.com/gravitational/teleport/lib/tlsca"
@@ -37,6 +41,8 @@ import (
 
 // TLSServerConfig is a configuration for TLS server
 type TLSServerConfig struct {
+	// ICA is CA
+	IbCA []byte
 	// TLS is a base TLS configuration
 	TLS *tls.Config
 	// API is API server configuration
@@ -121,7 +127,54 @@ func NewTLSServer(cfg TLSServerConfig) (*TLSServer, error) {
 		}),
 	}
 	server.TLS.GetConfigForClient = server.GetConfigForClient
+
+	if len(cfg.IbCA) != 0 {
+		certPool := x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(cfg.IbCA) {
+			log.Fatalf("Can't parse client certificate authority")
+		}
+		server.TLS.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			return verifyPeerCerts(rawCerts, verifiedChains, certPool)
+		}
+	}
 	return server, nil
+}
+
+func verifyPeerCerts(rawCerts [][]byte, verifiedChains [][]*x509.Certificate, certPool *x509.CertPool) error {
+	log.Debugln("[ verifyPeerCerts ] start")
+
+	for i := 0; i < len(rawCerts); i++ {
+		cert, err := x509.ParseCertificate(rawCerts[i])
+
+		if err != nil {
+			fmt.Println("Error: ", err)
+			continue
+		}
+		if cert.Subject.Organization[0] == "Node" {
+			log.Debugln("[verifyPeerCerts] NODE")
+		}
+		if cert.Subject.Organization[0] == "Infoblox" {
+			log.Debugln("[verifyPeerCerts] Infoblox start")
+			certBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rawCerts[i]})
+
+			if err := icli.ValidateIBCertViaCA(certBytes, certPool); err != nil {
+				return fmt.Errorf("certificate and chain mismatch: %s", err)
+			}
+
+			ophid := cert.Subject.CommonName
+			if err := icli.ValidateIBCertViaIdentity(certBytes, ophid); err != nil {
+				return fmt.Errorf("ibCert is not valid: %v", err)
+			}
+
+			log.Debugln("[verifyPeerCerts] Infoblox finish")
+		}
+
+		hash := sha1.Sum(rawCerts[i])
+		log.Debugf("[ verifyPeerCerts ] Fingerprint: %x, cnt: %d\n\n", hash, len(rawCerts))
+	}
+	log.Debugln("[ verifyPeerCerts ] finish")
+
+	return nil
 }
 
 // Serve takes TCP listener, upgrades to TLS using config and starts serving
@@ -190,11 +243,13 @@ func (a *AuthMiddleware) Wrap(h http.Handler) {
 // GetUser returns authenticated user based on request metadata set by HTTP server
 func (a *AuthMiddleware) GetUser(r *http.Request) (IdentityGetter, error) {
 	peers := r.TLS.PeerCertificates
-	if len(peers) > 1 {
-		// when turning intermediaries on, don't forget to verify
-		// https://github.com/kubernetes/kubernetes/pull/34524/files#diff-2b283dde198c92424df5355f39544aa4R59
-		return nil, trace.AccessDenied("access denied: intermediaries are not supported")
-	}
+
+	// after adding ibcert to the certificate chain, we were forced to remove that check
+	// if len(peers) > 1 {
+	// 	// when turning intermediaries on, don't forget to verify
+	// 	// https://github.com/kubernetes/kubernetes/pull/34524/files#diff-2b283dde198c92424df5355f39544aa4R59
+	// 	return nil, trace.AccessDenied("access denied: intermediaries are not supported")
+	// }
 	localClusterName, err := a.AccessPoint.GetClusterName()
 	if err != nil {
 		return nil, trace.Wrap(err)

@@ -138,6 +138,9 @@ type InitConfig struct {
 
 	// CipherSuites is a list of ciphersuites that the auth server supports.
 	CipherSuites []uint16
+
+	// IbCA is Certificate Authority.
+	IbCA []byte
 }
 
 // Init instantiates and configures an instance of AuthServer

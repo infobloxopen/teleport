@@ -532,3 +532,27 @@ func HostCredentials(ctx context.Context, proxyAddr string, insecure bool, req a
 
 	return packedKeys, nil
 }
+
+// HostCredentialsCert is used to fetch host credentials for a node.
+func HostCredentialsCert(ctx context.Context, proxyAddr string, insecure bool, req auth.RegisterUsingCertRequest) (*auth.PackedKeys, error) {
+	log.Debugf("[HostCredentialsCert] start")
+	clt, _, err := initClient(proxyAddr, insecure, nil)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	log.Debugf("[HostCredentialsCert] webapi/host/cert")
+	resp, err := clt.PostJSON(ctx, clt.Endpoint("webapi", "host", "cert"), req)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	var packedKeys *auth.PackedKeys
+	err = json.Unmarshal(resp.Bytes(), &packedKeys)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	log.Debugf("[HostCredentialsCert] finish")
+	return packedKeys, nil
+}

@@ -10,7 +10,7 @@
 # Naming convention:
 #	for stable releases we use "1.0.0" format
 #   for pre-releases, we use   "1.0.0-beta.2" format
-VERSION=4.2.2-alpha.1
+VERSION?=4.2.2-alpha.1
 
 DOCKER_IMAGE ?= quay.io/gravitational/teleport
 
@@ -354,7 +354,7 @@ install: build
 # Docker image build. Always build the binaries themselves within docker (see
 # the "docker" rule) to avoid dependencies on the host libc version.
 .PHONY: image
-image: docker-binaries
+image: full
 	cp ./build.assets/charts/Dockerfile $(BUILDDIR)/
 	cd $(BUILDDIR) && docker build --no-cache . -t $(DOCKER_IMAGE):$(VERSION)
 	if [ -f e/Makefile ]; then $(MAKE) -C e image; fi
@@ -452,3 +452,12 @@ init-webapps-submodules-e:
 init-submodules-e: init-webapps-submodules-e
 	git submodule init e
 	git submodule update
+
+tpsingle:
+	$(MAKE) $(BUILDDIR)/teleport
+
+tp: tpsingle $(BUILDDIR)/webassets.zip
+	@echo "---> Attaching OSS web assets."
+	cat $(BUILDDIR)/webassets.zip >> $(BUILDDIR)/teleport
+	rm -fr $(BUILDDIR)/webassets.zip
+	zip -q -A $(BUILDDIR)/teleport

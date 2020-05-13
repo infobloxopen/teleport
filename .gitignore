@@ -56,3 +56,11 @@ terraform.tfstate
 # ansible stuff
 ssh.config
 *.retry
+
+
+e
+1-auth-data
+1-node-data
+auth.log
+node.log
+build.examples

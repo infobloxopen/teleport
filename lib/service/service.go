@@ -75,6 +75,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	kyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 var log = logrus.WithFields(logrus.Fields{
@@ -999,6 +1000,7 @@ func (process *TeleportProcess) initAuthService() error {
 		OIDCConnectors:       cfg.OIDCConnectors,
 		AuditLog:             process.auditLog,
 		CipherSuites:         cfg.CipherSuites,
+		IbCA:                 cfg.IbCA,
 	})
 	if err != nil {
 		return trace.Wrap(err)
@@ -1062,6 +1064,7 @@ func (process *TeleportProcess) initAuthService() error {
 		LimiterConfig: cfg.Auth.Limiter,
 		AccessPoint:   authCache,
 		Component:     teleport.Component(teleport.ComponentAuth, process.id),
+		IbCA:          cfg.IbCA,
 	})
 	if err != nil {
 		return trace.Wrap(err)
@@ -1113,6 +1116,13 @@ func (process *TeleportProcess) initAuthService() error {
 		})
 		return nil
 	})
+
+	if process.Config.GithubAuto {
+		err := process.creatingGithubConnector(process.Config.GithubPath)
+		if err != nil {
+			log.Errorf("Could not Create Github connector: %v", err)
+		}
+	}
 
 	// figure out server public address
 	authAddr := cfg.Auth.SSHAddr.Addr
@@ -2503,4 +2513,61 @@ func initSelfSignedHTTPSCert(cfg *Config) (err error) {
 		return trace.Wrap(err, "error writing key PEM")
 	}
 	return nil
+}
+
+func (process *TeleportProcess) creatingGithubConnector(path string) error {
+	if len(path) == 0 {
+		return trace.BadParameter("github: github path is not set")
+	}
+
+	log.Debugf("Delete github connector if exixst")
+	process.localAuth.DeleteGithubConnector("github")
+
+	reader, err := utils.OpenFile(path)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	decoder := kyaml.NewYAMLOrJSONDecoder(reader, defaults.LookaheadBufSize)
+	count := 0
+	for {
+		var raw services.UnknownResource
+		err := decoder.Decode(&raw)
+		if err != nil {
+			if err == io.EOF {
+				if count == 0 {
+					return err
+				}
+				return nil
+			}
+			return trace.Wrap(err)
+		}
+		count++
+		if raw.Kind != "github" {
+			return trace.BadParameter("creating resources of type %q is only supported through tctl", raw.Kind)
+		}
+
+		connector, err := services.GetGithubConnectorMarshaler().Unmarshal(raw.Raw)
+		if err != nil {
+			return err
+		}
+
+		ghCID := os.Getenv("GITHUB_CLIENTID")
+		if ghCID != "" {
+			log.Debugln("Replace GITHUB_CLIENTID")
+			connector.SetClientID(ghCID)
+		}
+		ghCS := os.Getenv("GITHUB_CLIENTSECRET")
+		if ghCS != "" {
+			log.Debugln("Replace GITHUB_CLIENTSECRET")
+			connector.SetClientSecret(ghCS)
+		}
+
+		err = process.localAuth.CreateGithubConnector(connector)
+		if err != nil {
+			return err
+		}
+
+		log.Debugf("Github connector was created")
+		return nil
+	}
 }

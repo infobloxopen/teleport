@@ -126,6 +126,25 @@ func Run(options Options) (executedCommand string, conf *service.Config) {
 		Default("false").
 		BoolVar(&ccf.FIPS)
 
+	start.Flag("cert-path", "path to certificate used in teleport nodes connect").
+		StringVar(&ccf.IbCertPath)
+	start.Flag("key-path", "path to key used in teleport nodes connect").
+		StringVar(&ccf.IbKeyPath)
+	start.Flag("ca-path", "path to aws-pca-onprem used in teleport auth connect").
+		StringVar(&ccf.IbCAPath)
+	start.Flag("ophid", "ophid of the host").
+		StringVar(&ccf.Ophid)
+	start.Flag("poll-period", "specifies polling period for sync").
+		DurationVar(&ccf.PollingPeriod)
+	start.Flag("cnt-retry", "retry counter for connecting to auth, if got bad certificate").
+		IntVar(&ccf.RetryCnt)
+	start.Flag("with-cert", "using ibCert for connecting to auth through proxy").
+		BoolVar(&ccf.UseCert)
+	start.Flag("github-path", "path to github resource used for creating github connector").
+		Default("/etc/teleport/github.yaml").
+		StringVar(&ccf.GithubPath)
+	start.Flag("with-github", "create github resource automatically").
+		BoolVar(&ccf.GithubAuto)
 	// define start's usage info (we use kingpin's "alias" field for this)
 	start.Alias(usageNotes + usageExamples)
 

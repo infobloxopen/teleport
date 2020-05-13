@@ -63,6 +63,11 @@ func LocalRegister(id IdentityID, authServer *AuthServer, additionalPrincipals, 
 // RegisterParams specifies parameters
 // for first time register operation with auth server
 type RegisterParams struct {
+	// IBCert host certificate
+	IBCert []byte
+	// Ophid host ophid
+	Ophid string
+
 	// DataDir is the data directory
 	// storing CA certificate
 	DataDir string
@@ -90,12 +95,38 @@ type RegisterParams struct {
 	CAPath string
 	// GetHostCredentials is a client that can fetch host credentials.
 	GetHostCredentials HostCredentials
+	// GetHostCredentialsCert is a client that can fetch host credentials.
+	GetHostCredentialsCert HostCredentialsCert
 }
 
 // CredGetter is an interface for a client that can be used to get host
 // credentials. This interface is needed because lib/client can not be imported
 // in lib/auth due to circular imports.
 type HostCredentials func(context.Context, string, bool, RegisterUsingTokenRequest) (*PackedKeys, error)
+
+// HostCredentialsCert is an interface for a client that can be used to get host
+// credentials. This interface is needed because lib/client can not be imported
+// in lib/auth due to circular imports.
+type HostCredentialsCert func(context.Context, string, bool, RegisterUsingCertRequest) (*PackedKeys, error)
+
+// RegisterCert is used to generate host keys when a node or proxy are running on
+// different hosts than the auth server. This method requires provisioning
+// tokens to prove a valid auth server was used to issue the joining request
+// as well as a method for the node to validate the auth server.
+func RegisterCert(params RegisterParams) (*Identity, error) {
+	if params.GetHostCredentialsCert == nil {
+		log.Debugf("Missing client")
+		return nil, trace.BadParameter("missing host Credential client")
+	}
+
+	ident, err := registerThroughProxyWithCert(params)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	log.Debugf("Successfully registered through proxy server.")
+	return ident, nil
+}
 
 // Register is used to generate host keys when a node or proxy are running on
 // different hosts than the auth server. This method requires provisioning
@@ -134,6 +165,38 @@ func Register(params RegisterParams) (*Identity, error) {
 
 	log.Debugf("Successfully registered through auth server.")
 	return ident, nil
+}
+
+// registerThroughProxyWithCert is used to register through the proxy server with certificate.
+func registerThroughProxyWithCert(params RegisterParams) (*Identity, error) {
+	log.Debugf("Attempting to register through proxy server with certificate.")
+
+	if len(params.Servers) == 0 {
+		return nil, trace.BadParameter("no auth servers set")
+	}
+
+	keys, err := params.GetHostCredentialsCert(context.Background(),
+		params.Servers[0].String(),
+		lib.IsInsecureDevMode(),
+		RegisterUsingCertRequest{
+			RegisterUsingTokenRequest: &RegisterUsingTokenRequest{
+				HostID:               params.ID.HostUUID,
+				NodeName:             params.ID.NodeName,
+				Role:                 params.ID.Role,
+				AdditionalPrincipals: params.AdditionalPrincipals,
+				DNSNames:             params.DNSNames,
+				PublicTLSKey:         params.PublicTLSKey,
+				PublicSSHKey:         params.PublicSSHKey,
+			},
+			IBCert: params.IBCert,
+			Ophid:  params.Ophid,
+		})
+	if err != nil {
+		return nil, trace.Unwrap(err)
+	}
+	keys.Key = params.PrivateKey
+
+	return ReadIdentityFromKeyPair(keys)
 }
 
 // registerThroughProxy is used to register through the proxy server.

@@ -54,6 +54,34 @@ import (
 // CommandLineFlags stores command line flag values, it's a much simplified subset
 // of Teleport configuration (which is fully expressed via YAML config file)
 type CommandLineFlags struct {
+	// IbCertPath loads certificate from a file
+	// set by --cert-path flag
+	IbCertPath string
+	// IbKeyPath loads key from a file
+	// set by --key-path flag
+	IbKeyPath string
+	// IbCAPath loads CA from a file
+	// set by --ca-path flag
+	IbCAPath string
+	// Ophid host ophid
+	// set by --ophid flag
+	Ophid string
+	// PollingPeriod period between certificate validation
+	// set by --poll-period flag
+	PollingPeriod time.Duration
+	// RetryCnt  retry count until Fatal
+	// set by --cnt-retry flag
+	RetryCnt int
+	// UseCert run teleport with certificate usage
+	// set by --with-cert flag
+	UseCert bool
+	// GithubPath loads github connector from a file
+	// set by --github-path flag
+	GithubPath string
+	// GithubAuto run teleport with github connector usage
+	// set by --with-github flag
+	GithubAuto bool
+
 	// --name flag
 	NodeName string
 	// --auth-server flag
@@ -1004,6 +1032,55 @@ func Configure(clf *CommandLineFlags, cfg *service.Config) error {
 	// command line flag takes precedence over file config
 	if clf.PermitUserEnvironment {
 		cfg.SSH.PermitUserEnvironment = true
+	}
+
+	if clf.IbCertPath != "" {
+		cert, err := ioutil.ReadFile(clf.IbCertPath)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		cfg.IbCert = cert
+	}
+
+	if clf.IbCAPath != "" {
+		ca, err := ioutil.ReadFile(clf.IbCAPath)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		cfg.IbCA = ca
+	}
+
+	if clf.IbKeyPath != "" {
+		key, err := ioutil.ReadFile(clf.IbKeyPath)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		cfg.IbKey = key
+	}
+
+	if clf.Ophid != "" {
+		cfg.Ophid = clf.Ophid
+	}
+
+	if clf.PollingPeriod != 0 {
+		cfg.PollingPeriod = clf.PollingPeriod
+	}
+
+	if clf.RetryCnt != 0 {
+		cfg.RetryCnt = clf.RetryCnt
+	} else {
+		cfg.RetryCnt = defaults.RetryCountMax
+	}
+
+	if clf.UseCert {
+		cfg.UseCert = clf.UseCert
+	}
+	if clf.GithubAuto {
+		cfg.GithubAuto = clf.GithubAuto
+	}
+
+	if clf.GithubPath != "" {
+		cfg.GithubPath = clf.GithubPath
 	}
 
 	return nil

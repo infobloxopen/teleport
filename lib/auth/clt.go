@@ -633,6 +633,24 @@ func (c *Client) RegisterUsingToken(req RegisterUsingTokenRequest) (*PackedKeys,
 	return &keys, nil
 }
 
+// RegisterUsingCert calls the auth service API to register a new node using ibCert
+func (c *Client) RegisterUsingCert(req RegisterUsingCertRequest) (*PackedKeys, error) {
+	log.Debugln("[RegisterUsingCert] start")
+
+	out, err := c.PostJSON(c.Endpoint("ibcert", "register"), req)
+	if err != nil {
+		log.Debugf("[RegisterUsingCert] err %v", err)
+		return nil, trace.Wrap(err)
+	}
+	var keys PackedKeys
+	if err := json.Unmarshal(out.Bytes(), &keys); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	log.Debugln("[RegisterUsingCert] finish")
+	return &keys, nil
+}
+
 // RenewCredentials returns a new set of credentials associated
 // with the server with the same privileges
 func (c *Client) GenerateServerKeys(req GenerateServerKeysRequest) (*PackedKeys, error) {
@@ -2836,6 +2854,10 @@ type ProvisioningService interface {
 	// RegisterUsingToken calls the auth service API to register a new node via registration token
 	// which has been previously issued via GenerateToken
 	RegisterUsingToken(req RegisterUsingTokenRequest) (*PackedKeys, error)
+
+	// RegisterUsingCert calls the auth service API to register a new node via certificate
+	// which has been previously issued via GenerateToken
+	RegisterUsingCert(req RegisterUsingCertRequest) (*PackedKeys, error)
 
 	// RegisterNewAuthServer is used to register new auth server with token
 	RegisterNewAuthServer(token string) error
