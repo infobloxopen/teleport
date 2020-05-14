@@ -7,6 +7,7 @@ env: env-4
 host:
   csp:
     domain: "{{ .Values.env }}.test.infoblox.com"
+    ingressClass: nginx
 
 region: us-east-1
 replicas: 1
@@ -17,6 +18,7 @@ serviceInternalName: internal
 enabled:
   # ------------------- begin enabled
     namespace: true            # 1
+    ingress: true              # 2
   # ------------------- end enabled
 
 image:
@@ -169,3 +171,7 @@ github:
     logins:
     - root
     kubernetesGroups: ["system:masters"]
+
+ingress:
+  path: "/api/debug/v2/launch/(.*)/"
+  rewrite: "https://{{ tpl .Values.appDomain . }}:3080/webapi/github/login/web?connector_id=github&redirect_url=https://{{ tpl .Values.appDomain . }}:3080/web/cluster/{{ .Values.env }}/console/node/$1/root"
