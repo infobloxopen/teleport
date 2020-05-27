@@ -102,7 +102,7 @@ $(BUILDDIR)/tsh:
 # only tsh is built.
 #
 .PHONY:full
-full: all $(BUILDDIR)/webassets.zip
+full: docker-binaries $(BUILDDIR)/webassets.zip
 ifneq ("$(OS)", "windows")
 	@echo "---> Attaching OSS web assets."
 	cat $(BUILDDIR)/webassets.zip >> $(BUILDDIR)/teleport

@@ -631,3 +631,30 @@ func CheckPasswordLimiter() *limiter.Limiter {
 	}
 	return limiter
 }
+
+const (
+	// DefaultLoginKeyword is login for starting debug session with the highest available permissions
+	DefaultLoginKeyword = "default"
+)
+
+var (
+	// LoginToPriority mapping of available logins to priority
+	LoginToPriority = map[string]int{
+		"root":     1,
+		"dev":      2,
+		"qa":       3,
+		"support":  4,
+		"customer": 5,
+		"user":     6,
+	}
+
+	// PriorityToLogin mapping of priority to available logins
+	PriorityToLogin = map[int]string{
+		1: "root",
+		2: "dev",
+		3: "qa",
+		4: "support",
+		5: "customer",
+		6: "user",
+	}
+)
