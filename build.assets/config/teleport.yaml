@@ -1,0 +1,27 @@
+teleport:
+  log:
+    severity: DEBUG
+
+  data_dir: /var/lib/teleport
+  storage:
+      path: /var/lib/teleport/backend
+      type: dir
+
+auth_service:
+  enabled: no
+
+ssh_service:
+  enabled: yes
+  commands:
+      - name: kernel
+        command: [/bin/uname, -r]
+        period: 1h0m0s
+      - name: arch
+        command: [uname, -p]
+        period: 1h0m0s
+      - name: uptime
+        command: [uptime, -p]
+        period: 5s
+
+proxy_service:
+  enabled: no
