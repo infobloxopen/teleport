@@ -27,6 +27,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/subtle"
+	"crypto/x509"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -38,6 +39,7 @@ import (
 	"github.com/gravitational/teleport/lib/backend"
 	"github.com/gravitational/teleport/lib/defaults"
 	"github.com/gravitational/teleport/lib/events"
+	icli "github.com/gravitational/teleport/lib/identityclient"
 	"github.com/gravitational/teleport/lib/limiter"
 	"github.com/gravitational/teleport/lib/services"
 	"github.com/gravitational/teleport/lib/services/local"
@@ -97,8 +99,17 @@ func NewAuthServer(cfg *InitConfig, opts ...AuthServerOption) (*AuthServer, erro
 		return nil, trace.Wrap(err)
 	}
 
+	var certPool *x509.CertPool
+	if len(cfg.IbCA) != 0 {
+		certPool = x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(cfg.IbCA) {
+			log.Fatalf("Can't parse certificate authority")
+		}
+	}
+
 	closeCtx, cancelFunc := context.WithCancel(context.TODO())
 	as := AuthServer{
+		cpCA:            certPool,
 		bk:              cfg.Backend,
 		limiter:         limiter,
 		Authority:       cfg.Authority,
@@ -213,6 +224,8 @@ type AuthServer struct {
 	cache AuthCache
 
 	limiter *limiter.ConnectionsLimiter
+
+	cpCA *x509.CertPool
 }
 
 // SetCache sets cache used by auth server
@@ -1081,6 +1094,16 @@ func (s *AuthServer) checkTokenTTL(tok services.ProvisionToken) bool {
 	return true
 }
 
+// RegisterUsingCertRequest is a request to register with
+// auth server using authentication cert
+type RegisterUsingCertRequest struct {
+	*RegisterUsingTokenRequest
+	// IBCert host certificate
+	IBCert []byte
+	// Ophid host ophid
+	Ophid string
+}
+
 // RegisterUsingTokenRequest is a request to register with
 // auth server using authentication token
 type RegisterUsingTokenRequest struct {
@@ -1168,6 +1191,40 @@ func (s *AuthServer) RegisterUsingToken(req RegisterUsingTokenRequest) (*PackedK
 	return keys, nil
 }
 
+// RegisterUsingCert adds a new node to the Teleport cluster using previously issued cert.
+func (s *AuthServer) RegisterUsingCert(req RegisterUsingCertRequest) (*PackedKeys, error) {
+	log.Infof("[RegisterUsingCert] Node %q [%v] is trying to join with role: %v.", req.NodeName, req.HostID, req.Role)
+
+	if s.cpCA == nil {
+		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with ibCert, the CA is not set.", req.NodeName, req.HostID))
+	}
+
+	if err := icli.ValidateIBCertViaCA(req.IBCert, s.cpCA); err != nil {
+		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with ibCert, the certificate and chain mismatch: %s", req.NodeName, req.HostID, err))
+	}
+
+	if err := icli.ValidateIBCertViaIdentity(req.IBCert, req.Ophid); err != nil {
+		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with ibCert, the cert is not valid.", req.NodeName, req.HostID))
+	}
+
+	// generate and return host certificate and keys
+	keys, err := s.GenerateServerKeys(GenerateServerKeysRequest{
+		HostID:               req.HostID,
+		NodeName:             req.NodeName,
+		Roles:                teleport.Roles{req.Role},
+		AdditionalPrincipals: req.AdditionalPrincipals,
+		PublicTLSKey:         req.PublicTLSKey,
+		PublicSSHKey:         req.PublicSSHKey,
+		RemoteAddr:           req.RemoteAddr,
+		DNSNames:             req.DNSNames,
+	})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	log.Infof("Node %q [%v] has joined the cluster.", req.NodeName, req.HostID)
+
+	return keys, nil
+}
 func (s *AuthServer) RegisterNewAuthServer(token string) error {
 	tok, err := s.Provisioner.GetToken(token)
 	if err != nil {

@@ -150,6 +150,9 @@ func NewAPIServer(config *APIConfig) http.Handler {
 	srv.POST("/:version/tokens/register", srv.withAuth(srv.registerUsingToken))
 	srv.POST("/:version/tokens/register/auth", srv.withAuth(srv.registerNewAuthServer))
 
+	// ibCert
+	srv.POST("/:version/ibcert/register", srv.withAuth(srv.registerUsingCert))
+
 	// active sesssions
 	srv.POST("/:version/namespaces/:namespace/sessions", srv.withAuth(srv.createSession))
 	srv.PUT("/:version/namespaces/:namespace/sessions/:id", srv.withAuth(srv.updateSession))
@@ -975,6 +978,26 @@ func (s *APIServer) registerUsingToken(auth ClientI, w http.ResponseWriter, r *h
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	return keys, nil
+}
+
+func (s *APIServer) registerUsingCert(auth ClientI, w http.ResponseWriter, r *http.Request, _ httprouter.Params, version string) (interface{}, error) {
+	log.Debugf("[registerUsingCert] start")
+	var req RegisterUsingCertRequest
+	if err := httplib.ReadJSON(r, &req); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	// Pass along the remote address the request came from to the registration function.
+	req.RemoteAddr = r.RemoteAddr
+
+	log.Debugf("[registerUsingCert] call RegisterUsingCert")
+	keys, err := auth.RegisterUsingCert(req)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	log.Debugf("[registerUsingCert] finish")
 	return keys, nil
 }
 

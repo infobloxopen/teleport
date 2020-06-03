@@ -230,6 +230,7 @@ func NewHandler(cfg Config, opts ...HandlerOption) (*RewritingHandler, error) {
 
 	// Issue host credentials.
 	h.POST("/webapi/host/credentials", httplib.MakeHandler(h.hostCredentials))
+	h.POST("/webapi/host/cert", httplib.MakeHandler(h.hostCredentialsCert))
 
 	// if Web UI is enabled, check the assets dir:
 	var (
@@ -1821,6 +1822,23 @@ func (h *Handler) siteSessionEventsGet(w http.ResponseWriter, r *http.Request, p
 		return nil, trace.Wrap(err)
 	}
 	return eventsListGetResponse{Events: e}, nil
+}
+
+// hostCredentialsCert sends a registration cert and metadata to the Auth Server
+// and gets back SSH and TLS certificates.
+func (h *Handler) hostCredentialsCert(w http.ResponseWriter, r *http.Request, p httprouter.Params) (interface{}, error) {
+	var req auth.RegisterUsingCertRequest
+	if err := httplib.ReadJSON(r, &req); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	authClient := h.cfg.ProxyClient
+	packedKeys, err := authClient.RegisterUsingCert(req)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	return packedKeys, nil
 }
 
 // hostCredentials sends a registration token and metadata to the Auth Server

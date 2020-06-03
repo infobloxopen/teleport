@@ -251,6 +251,9 @@ const (
 )
 
 var (
+	// RetryCountMax is the count of retry to connect to auth
+	RetryCountMax = 10
+
 	// ResyncInterval is how often tunnels are resynced.
 	ResyncInterval = 5 * time.Second
 

@@ -158,6 +158,9 @@ var ErrTeleportReloading = &trace.CompareFailedError{Message: "teleport process 
 // ErrTeleportExited means that teleport has exited
 var ErrTeleportExited = &trace.CompareFailedError{Message: "teleport process has shutdown"}
 
+// ErrTeleportPanic means that teleport has exited
+var ErrTeleportPanic = &trace.CompareFailedError{Message: "teleport process has shutdown"}
+
 func (process *TeleportProcess) writeToSignalPipe(signalPipe *os.File, message string) error {
 	messageSignalled, cancel := context.WithCancel(context.Background())
 	// Below the cancel is called second time, but it's ok.
