@@ -1,0 +1,28 @@
+{{- if .Values.enabled.ingress -}}
+{{- $ns := include "teleport.namespace" . -}}
+{{- $appName := include "teleport.name" . -}}
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ $appName }}-ingress
+  namespace: {{ $ns }}
+  annotations:
+    kubernetes.io/ingress.class: {{ tpl (.Values.host.csp.ingressClass) . }}
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/rewrite-target: {{ tpl .Values.ingress.rewrite . }}
+spec:
+  rules:
+  - http:
+      paths:
+      - path: {{ .Values.ingress.path }}
+        backend:
+          serviceName: {{ $appName }}-external
+          servicePort: proxyweb
+    host: {{ tpl (.Values.host.csp.domain) . }}
+  tls:
+  - secretName: {{ tpl .Values.proxy.tls.secretName . }}
+    hosts:
+    - {{ tpl (.Values.host.csp.domain) . }}
+{{- end -}}
