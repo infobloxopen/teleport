@@ -31,6 +31,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1431,6 +1432,32 @@ func (h *Handler) siteNodeConnect(
 	clt, err := ctx.GetUserClient(site)
 	if err != nil {
 		return nil, trace.Wrap(err)
+	}
+
+	if req.Login == defaults.DefaultLoginKeyword {
+		_, cert, err := ctx.GetAgent()
+		if err != nil {
+			log.Errorf("[WEB] Error getting logged user certificate: %v", err)
+			return nil, trace.Wrap(err)
+		}
+
+		var sortedLogins []string
+		for _, login := range cert.ValidPrincipals {
+			if _, ok := defaults.LoginToPriority[login]; ok {
+				sortedLogins = append(sortedLogins, login)
+			}
+		}
+		sort.Slice(sortedLogins, func(i, j int) bool {
+			return defaults.LoginToPriority[sortedLogins[i]] < defaults.LoginToPriority[sortedLogins[j]]
+		})
+		if len(sortedLogins) == 0 {
+			log.Errorf("[WEB] Error getting default login for the user %v", cert.KeyId)
+			return nil, trace.Wrap(fmt.Errorf("[WEB] Error getting default login for the user %v",
+				cert.KeyId))
+		}
+
+		req.Login = sortedLogins[0]
+		log.Debugf("[WEB] The default login for user %v is %v", cert.KeyId, req.Login)
 	}
 
 	term, err := NewTerminal(*req, clt, ctx)
