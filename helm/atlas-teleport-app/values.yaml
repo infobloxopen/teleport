@@ -34,13 +34,9 @@ services:
   - name: external
     type: LoadBalancer
     ports:
-      proxyweb:
-        port: 3080
-        targetPort: 3080
-        protocol: TCP
-      proxytunnel:
-        port: 3024
-        targetPort: 3024
+      proxywebtunnel:
+        port: 443
+        targetPort: 443
         protocol: TCP
     annotations:
       external-dns.alpha.kubernetes.io/hostname: "{{ tpl  .Values.appDomain . }}."
