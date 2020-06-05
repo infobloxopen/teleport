@@ -1,7 +1,7 @@
 {{- $appName := include "teleport.name" . -}}
 {{- $ns := include "teleport.namespace" . -}}
 {{- $labels := include "teleport.labels" . -}}
-{{- $infobloxVPN := .Values.infobloxVPN -}}
+{{- $AllowedSourceRanges := .Values.AllowedSourceRanges -}}
 {{- range $service := .Values.services }}
 ---
 apiVersion: v1
@@ -19,9 +19,9 @@ metadata:
  {{- end }}
 spec:
   type: {{ $service.type }}
-  {{- if $infobloxVPN }}
+  {{- if $AllowedSourceRanges }}
   loadBalancerSourceRanges:
-  {{- range $infobloxVPN }}
+  {{- range $AllowedSourceRanges }}
     - {{ . }}
   {{- end }}
   {{- end }}

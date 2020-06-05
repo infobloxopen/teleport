@@ -58,7 +58,7 @@ services:
         targetPort: 3023
         protocol: TCP
 
-infobloxVPN:
+AllowedSourceRanges:
 
 # Teleport Proxy configuration
 proxy:
