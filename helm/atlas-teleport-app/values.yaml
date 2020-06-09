@@ -58,7 +58,7 @@ services:
         targetPort: 3023
         protocol: TCP
 
-AllowedSourceRanges:
+allowedSourceRanges:
 
 # Teleport Proxy configuration
 proxy:

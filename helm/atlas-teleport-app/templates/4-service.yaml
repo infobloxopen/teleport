@@ -1,7 +1,7 @@
 {{- $appName := include "teleport.name" . -}}
 {{- $ns := include "teleport.namespace" . -}}
 {{- $labels := include "teleport.labels" . -}}
-{{- $AllowedSourceRanges := .Values.AllowedSourceRanges -}}
+{{- $allowedSourceRanges := .Values.allowedSourceRanges -}}
 {{- range $service := .Values.services }}
 ---
 apiVersion: v1
@@ -19,9 +19,9 @@ metadata:
  {{- end }}
 spec:
   type: {{ $service.type }}
-  {{- if $AllowedSourceRanges }}
+  {{- if $allowedSourceRanges }}
   loadBalancerSourceRanges:
-  {{- range $AllowedSourceRanges }}
+  {{- range $allowedSourceRanges }}
     - {{ . }}
   {{- end }}
   {{- end }}
