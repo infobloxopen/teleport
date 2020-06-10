@@ -170,6 +170,10 @@ github:
     - root
     kubernetesGroups: ["system:masters"]
 
+role:
+  userName: user
+  nodeLabel: support
+
 ingress:
   path: "/api/debug/v2/launch/(.*)/"
   rewrite: "https://{{ tpl .Values.appDomain . }}:3080/webapi/github/login/web?connector_id=github&redirect_url=https://{{ tpl .Values.appDomain . }}:3080/web/cluster/{{ .Values.env }}/console/node/$1/default"

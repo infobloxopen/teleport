@@ -73,5 +73,19 @@ data:
         team: {{ tpl ($teams.team) $ }}
 
   {{- end }}
+  {{- if .Values.role }}
+  {{- end }}
+  role.yaml: |
+    kind: "role"
+    version: "v3"
+    metadata:
+      name: {{ .Values.role.userName }}
+    spec:
+      options:
+        max_session_ttl: "90h0m0s"
+      allow:
+        logins: [ {{ .Values.role.userName }} ]
+        node_labels:
+          access: {{ .Values.role.nodeLabel }}
 {{- end }}
 ---

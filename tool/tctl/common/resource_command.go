@@ -80,6 +80,7 @@ func (rc *ResourceCommand) Initialize(app *kingpin.Application, config *service.
 		services.KindTrustedCluster:  rc.createTrustedCluster,
 		services.KindGithubConnector: rc.createGithubConnector,
 		services.KindCertAuthority:   rc.createCertAuthority,
+		services.KindRole:            rc.createRole,
 	}
 	rc.config = config
 
@@ -341,6 +342,41 @@ func (rc *ResourceCommand) createUser(client auth.ClientI, raw services.UnknownR
 		}
 
 		fmt.Printf("user %q has been created\n", userName)
+	}
+
+	return nil
+}
+
+// createRole implements 'tctl create role.yaml' command
+func (rc *ResourceCommand) createRole(client auth.ClientI, raw services.UnknownResource) error {
+	role, err := services.GetRoleMarshaler().UnmarshalRole(raw.Raw)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	roleName := role.GetName()
+	_, err = client.GetRole(roleName)
+	if err != nil && !trace.IsNotFound(err) {
+		return trace.Wrap(err)
+	}
+	exists := (err == nil)
+
+	if exists {
+		if rc.force == false {
+			return trace.AlreadyExists("role %q already exists", roleName)
+		}
+
+		if err := client.UpsertRole(role); err != nil {
+			return trace.Wrap(err)
+		}
+
+		fmt.Printf("user %q has been updated\n", roleName)
+	} else {
+		if err := client.UpsertRole(role); err != nil {
+			return trace.Wrap(err)
+		}
+
+		fmt.Printf("user %q has been created\n", roleName)
 	}
 
 	return nil
