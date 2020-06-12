@@ -17,9 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -161,6 +163,15 @@ type CLIConf struct {
 
 	// Debug sends debug logs to stdout.
 	Debug bool
+
+	// multiple host support
+
+	//HostsList
+	HostsList []string
+	//HostsFile
+	HostsFile string
+	//BatchFile
+	BatchFile string
 }
 
 func main() {
@@ -232,6 +243,21 @@ func Run(args []string, underTest bool) {
 	ssh.Flag("option", "OpenSSH options in the format used in the configuration file").Short('o').AllowDuplicate().StringsVar(&cf.Options)
 	ssh.Flag("no-remote-exec", "Don't execute remote command, useful for port forwarding").Short('N').BoolVar(&cf.NoRemoteExec)
 
+	// multihost
+	multihost := app.Command("multihost", "Execute command on multiple remote SSH nodes")
+	multihost.Arg("command", "Command to execute on a remote hosts").StringsVar(&cf.RemoteCommand)
+	multihost.Flag("hosts", "Hosts to execute commands on").AllowDuplicate().StringsVar(&cf.HostsList)
+	multihost.Flag("hosts-file", "File with list of hosts to execute command on").StringVar(&cf.HostsFile)
+	multihost.Flag("batch", "File with commands to execute on remote SSH nodes").StringVar(&cf.BatchFile)
+	multihost.Flag("port", "SSH port on a remote host").Short('p').Int32Var(&cf.NodePort)
+	multihost.Flag("forward-agent", "Forward agent to target node").Short('A').BoolVar(&cf.ForwardAgent)
+	multihost.Flag("forward", "Forward localhost connections to remote server").Short('L').StringsVar(&cf.LocalForwardPorts)
+	multihost.Flag("dynamic-forward", "Forward localhost connections to remote server using SOCKS5").Short('D').StringsVar(&cf.DynamicForwardedPorts)
+	multihost.Flag("local", "Execute command on localhost after connecting to SSH node").Default("false").BoolVar(&cf.LocalExec)
+	multihost.Flag("cluster", clusterHelp).Envar(clusterEnvVar).StringVar(&cf.SiteName)
+	multihost.Flag("option", "OpenSSH options in the format used in the configuration file").Short('o').AllowDuplicate().StringsVar(&cf.Options)
+	multihost.Flag("no-remote-exec", "Don't execute remote command, useful for port forwarding").Short('N').BoolVar(&cf.NoRemoteExec)
+
 	// join
 	join := app.Command("join", "Join the active SSH session")
 	join.Flag("cluster", clusterHelp).Envar(clusterEnvVar).StringVar(&cf.SiteName)
@@ -292,10 +318,11 @@ func Run(args []string, underTest bool) {
 	// about the certificate.
 	status := app.Command("status", "Display the list of proxy servers and retrieved certificates")
 
-	// On Windows, hide the "ssh", "join", "play", "scp", and "bench" commands
+	// On Windows, hide the "ssh", "multihost", "join", "play", "scp", and "bench" commands
 	// because they all use a terminal.
 	if runtime.GOOS == teleport.WindowsOS {
 		ssh.Hidden()
+		multihost.Hidden()
 		join.Hidden()
 		play.Hidden()
 		scp.Hidden()
@@ -339,6 +366,8 @@ func Run(args []string, underTest bool) {
 		utils.PrintVersion()
 	case ssh.FullCommand():
 		onSSH(&cf)
+	case multihost.FullCommand():
+		onMultihost(&cf)
 	case bench.FullCommand():
 		onBenchmark(&cf)
 	case join.FullCommand():
@@ -816,6 +845,59 @@ func onSSH(cf *CLIConf) {
 		} else {
 			utils.FatalError(err)
 		}
+	}
+}
+
+// onMultihost executes 'tsh ssh' command for multiple hosts
+func onMultihost(cf *CLIConf) {
+	if cf.HostsFile != "" {
+		if _, err := os.Stat(cf.HostsFile); err != nil {
+			fmt.Printf("The file with list of hosts %v does not exists: %v\n", cf.HostsFile, err)
+		} else {
+			b, err := ioutil.ReadFile(cf.HostsFile)
+			if err != nil {
+				fmt.Print("Error reading list of hosts from %v: %v\n", cf.HostsFile, err)
+			} else {
+				strHosts := string(b)
+				hosts := strings.Fields(strHosts)
+				cf.HostsList = append(cf.HostsList, hosts...)
+			}
+		}
+	}
+
+	if cf.BatchFile != "" {
+		if _, err := os.Stat(cf.BatchFile); err != nil {
+			fmt.Printf("The file with list of commands %v does not exists: %v\n", cf.BatchFile, err)
+		} else {
+			batchfile, err := os.Open(cf.BatchFile)
+			if err != nil {
+				fmt.Print("Error opening file %v with list of commands: %v\n", cf.BatchFile, err)
+			} else {
+				defer batchfile.Close()
+
+				cf.RemoteCommand = []string{}
+				scanner := bufio.NewScanner(batchfile)
+				for scanner.Scan() {
+					cf.RemoteCommand = append(cf.RemoteCommand, scanner.Text()+";")
+				}
+				if err := scanner.Err(); err != nil {
+					fmt.Print("Error reading commands from file %v: %v\n", cf.BatchFile, err)
+					cf.RemoteCommand = []string{}
+				}
+			}
+		}
+	}
+
+	if len(cf.RemoteCommand) < 1 {
+		fmt.Println("No commands to execute.")
+		return
+	}
+
+	for _, host := range cf.HostsList {
+		c := *cf
+		c.UserHost = host
+		fmt.Printf("Host: %v@%v\n", c.NodeLogin, c.UserHost)
+		onSSH(&c)
 	}
 }
 
