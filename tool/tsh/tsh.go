@@ -166,11 +166,11 @@ type CLIConf struct {
 
 	// multiple host support
 
-	//HostsList
+	//HostsList contains list of hosts to execute commands on each host from this list
 	HostsList []string
-	//HostsFile
+	//HostsFile contains path to the file with list of hosts
 	HostsFile string
-	//BatchFile
+	//BatchFile contains path to the file with list of commands to execute on remote hosts
 	BatchFile string
 }
 
@@ -245,10 +245,10 @@ func Run(args []string, underTest bool) {
 
 	// multihost
 	multihost := app.Command("multihost", "Execute command on multiple remote SSH nodes")
-	multihost.Arg("command", "Command to execute on a remote hosts").StringsVar(&cf.RemoteCommand)
-	multihost.Flag("hosts", "Hosts to execute commands on").AllowDuplicate().StringsVar(&cf.HostsList)
+	multihost.Arg("command", "Command to execute on a remote nodes").StringsVar(&cf.RemoteCommand)
+	multihost.Flag("host", "Host to execute commands on").AllowDuplicate().StringsVar(&cf.HostsList)
 	multihost.Flag("hosts-file", "File with list of hosts to execute command on").StringVar(&cf.HostsFile)
-	multihost.Flag("batch", "File with commands to execute on remote SSH nodes").StringVar(&cf.BatchFile)
+	multihost.Flag("batch-file", "File with commands to execute on remote SSH nodes").StringVar(&cf.BatchFile)
 	multihost.Flag("port", "SSH port on a remote host").Short('p').Int32Var(&cf.NodePort)
 	multihost.Flag("forward-agent", "Forward agent to target node").Short('A').BoolVar(&cf.ForwardAgent)
 	multihost.Flag("forward", "Forward localhost connections to remote server").Short('L').StringsVar(&cf.LocalForwardPorts)
@@ -852,7 +852,7 @@ func onSSH(cf *CLIConf) {
 func onMultihost(cf *CLIConf) {
 	if cf.HostsFile != "" {
 		if _, err := os.Stat(cf.HostsFile); err != nil {
-			fmt.Printf("The file with list of hosts %v does not exists: %v\n", cf.HostsFile, err)
+			fmt.Printf("The specified file with list of hosts %v does not exist.\n", cf.HostsFile)
 		} else {
 			b, err := ioutil.ReadFile(cf.HostsFile)
 			if err != nil {
@@ -867,7 +867,7 @@ func onMultihost(cf *CLIConf) {
 
 	if cf.BatchFile != "" {
 		if _, err := os.Stat(cf.BatchFile); err != nil {
-			fmt.Printf("The file with list of commands %v does not exists: %v\n", cf.BatchFile, err)
+			fmt.Printf("The specified file with list of commands %v does not exist.\n", cf.BatchFile)
 		} else {
 			batchfile, err := os.Open(cf.BatchFile)
 			if err != nil {
@@ -875,9 +875,13 @@ func onMultihost(cf *CLIConf) {
 			} else {
 				defer batchfile.Close()
 
+				// make RemoteCommand empty because commands from the file take precedence
+				// over commands from the flag and it would be better to not join them
 				cf.RemoteCommand = []string{}
 				scanner := bufio.NewScanner(batchfile)
 				for scanner.Scan() {
+					// it is required to add ';' after each command in order to separate them
+					// however, this do not allow to use multiline commands
 					cf.RemoteCommand = append(cf.RemoteCommand, scanner.Text()+";")
 				}
 				if err := scanner.Err(); err != nil {
