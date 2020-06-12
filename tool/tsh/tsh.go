@@ -897,6 +897,10 @@ func onMultihost(cf *CLIConf) {
 		return
 	}
 
+	// The interactive session for multihost is not allowed
+	cf.Interactive = false
+	cf.BenchInteractive = false
+
 	for _, host := range cf.HostsList {
 		c := *cf
 		c.UserHost = host
