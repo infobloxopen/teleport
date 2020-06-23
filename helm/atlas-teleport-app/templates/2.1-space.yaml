@@ -4,11 +4,6 @@
 {{- $imagePullKeys := .Values.vaultCommon.imagepullsecret.keys }}
 {{- $imagePullPath := .Values.vaultCommon.imagepullsecret.path }}
 
-{{- $awsPcaSecretName := .Values.vaultCommon.awsPcaOnprem.name }}
-{{- $awsPcaType := .Values.vaultCommon.awsPcaOnprem.type }}
-{{- $awsPcaKeys := .Values.vaultCommon.awsPcaOnprem.keys }}
-{{- $awsPcaPath := .Values.vaultCommon.awsPcaOnprem.path }}
-
 apiVersion: spacecontroller.infoblox-cto.github.com/v1alpha1
 kind: Space
 metadata:
@@ -40,19 +35,3 @@ spec:
   type: {{ $imagePullType }}
 
 ---
-
-apiVersion: spacecontroller.infoblox-cto.github.com/v1alpha1
-kind: Space
-metadata:
-  labels:
-    app: {{ template "teleport.name" . }}
-  name: {{ $awsPcaSecretName }}
-  namespace: {{ .Release.Namespace }}
-spec:
-  path: {{ tpl $awsPcaPath . }}
-  secretName: {{ $awsPcaSecretName }}
-  secrets:
-    {{- range $awsPcaKeys }}
-    {{ . }}: VAULT
-    {{- end }}
-  type: {{ $awsPcaType }}

@@ -82,8 +82,7 @@ config:
     enabled: true
 extraArgs: 
   - --with-github
-  - --ca-path=/var/lib/ibcerts/ca.crt
-  - --poll-period=40s
+  - --poll-period=400s
 
 extraVars: {}
   # Provide the path to your own CA cert if you would like to use to
@@ -138,6 +137,14 @@ persistence:
 # set this to false to avoid running into issues for proxies that run in a separate k8s cluster
 automountServiceAccountToken: true
 
+aws:
+  pca:
+    arn: local
+    onprem:
+      name: aws-pca-onprem
+      path: /var/lib/awscerts
+      key: ca.crt
+
 vaultCommon:
   imagepullsecret:
     name: infobloxctokey
@@ -145,12 +152,6 @@ vaultCommon:
     keys:
       - config
     type: kubernetes.io/dockerconfigjson
-  awsPcaOnprem:
-    name: aws-pca-onprem
-    path: /certs/aws-pca-onprem
-    keys:
-      - ca.crt
-    type: Opaque
   github:
     name: onprem-teleport-github
     path: /{{ .Values.env }}/onprem-teleport/github
