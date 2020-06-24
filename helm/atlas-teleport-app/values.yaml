@@ -23,7 +23,7 @@ enabled:
 
 image:
   repository: infobloxcto/atlas.teleport.app
-  tag: v0.0.46
+  tag: # use .Chart.Version as default tag
   pullPolicy: IfNotPresent
   pullSecrets:
   # - name: myRegistryKeySecretName
