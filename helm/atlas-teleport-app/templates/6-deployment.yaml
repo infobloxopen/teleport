@@ -29,6 +29,8 @@ spec:
 {{- end }}
     spec:
       automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      # initContainers section is needed for transferring aws Private CA from aws to the base teleport container
+      # space controller mechanism was used before
       initContainers:
       - name: init-aws-pca-onprem
         image: mikesir87/aws-cli
