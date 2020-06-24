@@ -29,6 +29,15 @@ spec:
 {{- end }}
     spec:
       automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      # initContainers section is needed for transferring aws Private CA from aws to the base teleport container
+      # space controller mechanism was used before
+      initContainers:
+      - name: init-aws-pca-onprem
+        image: mikesir87/aws-cli
+        command: ['sh', '-c', 'aws acm-pca get-certificate-authority-certificate --certificate-authority-arn {{ .Values.aws.pca.arn }} | jq .[] -r >> {{ .Values.aws.pca.onprem.path }}/{{ .Values.aws.pca.onprem.key }}']
+        volumeMounts:
+        - mountPath: {{ .Values.aws.pca.onprem.path }}
+          name: {{ .Values.aws.pca.onprem.name }}
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -37,6 +46,7 @@ spec:
         args:
         - start
         - --config=/etc/teleport/teleport.yaml
+        - --ca-path={{ .Values.aws.pca.onprem.path }}/{{ .Values.aws.pca.onprem.key }}
 {{/* Required to add a node to an existing cluster */}}
 {{- if .Values.inviteToken }}
         - --token={{ .Values.inviteToken }}
@@ -85,8 +95,8 @@ spec:
         resources:
           {{ toYaml .Values.resources | indent 10 | trim }}
         volumeMounts:
-        - mountPath: /var/lib/ibcerts
-          name: {{ .Values.vaultCommon.awsPcaOnprem.name }}
+        - mountPath: {{ .Values.aws.pca.onprem.path }}
+          name: {{ .Values.aws.pca.onprem.name }}
           readOnly: true
 {{- if .Values.proxy.tls.enabled }}
         - mountPath: /var/lib/certs
@@ -107,9 +117,8 @@ spec:
 {{ toYaml .Values.extraVolumeMounts | indent 8 }}
 {{- end }}
       volumes:
-      - name: {{ .Values.vaultCommon.awsPcaOnprem.name }}
-        secret:
-          secretName: {{ .Values.vaultCommon.awsPcaOnprem.name }}
+      - name: {{ .Values.aws.pca.onprem.name }}
+        emptyDir: {}
 {{- if .Values.proxy.tls.enabled }}
       - name: {{ template "teleport.name" . }}-tls-web
         secret:
