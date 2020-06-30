@@ -18,6 +18,7 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/url"
@@ -85,7 +86,7 @@ func (d directDial) DialTimeout(network, address string, timeout time.Duration) 
 }
 
 type proxyDial struct {
-	proxyHost string
+	proxyURL *url.URL
 }
 
 // DialTimeout acts like Dial but takes a timeout.
@@ -97,14 +98,14 @@ func (d proxyDial) DialTimeout(network, address string, timeout time.Duration) (
 		defer cancel()
 		ctx = timeoutCtx
 	}
-	return dialProxy(ctx, d.proxyHost, address)
+	return dialProxy(ctx, d.proxyURL, address)
 }
 
 // Dial first connects to a proxy, then uses the connection to establish a new
 // SSH connection.
 func (d proxyDial) Dial(network string, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
 	// Build a proxy connection first.
-	pconn, err := dialProxy(context.Background(), d.proxyHost, addr)
+	pconn, err := dialProxy(context.Background(), d.proxyURL, addr)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -132,20 +133,34 @@ func DialerFromEnvironment(addr string) Dialer {
 
 	// If no proxy settings are in environment return regular ssh dialer,
 	// otherwise return a proxy dialer.
-	if proxyAddr == "" {
+	if proxyAddr == nil {
 		log.Debugf("No proxy set in environment, returning direct dialer.")
 		return directDial{}
 	}
 	log.Debugf("Found proxy %q in environment, returning proxy dialer.", proxyAddr)
-	return proxyDial{proxyHost: proxyAddr}
+	return proxyDial{proxyURL: proxyAddr}
 }
 
-func dialProxy(ctx context.Context, proxyAddr string, addr string) (net.Conn, error) {
+func dialProxy(ctx context.Context, proxyURL *url.URL, addr string) (net.Conn, error) {
+	var err error
+	var conn net.Conn
 
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", proxyAddr)
+	if proxyURL == nil {
+		log.Warnln("Unable to dial to proxy, proxyaddr is nil")
+		return nil, trace.BadParameter("unable to dial to proxy, proxyaddr is nil")
+	}
+	log.Debugf("[dialProxy] schema: %s", proxyURL.Scheme)
+
+	switch proxyURL.Scheme {
+	case "https":
+		conn, err = tls.Dial("tcp", proxyURL.Host, &tls.Config{})
+	default:
+		var d net.Dialer
+		conn, err = d.DialContext(ctx, "tcp", proxyURL.Host)
+	}
+
 	if err != nil {
-		log.Warnf("Unable to dial to proxy: %v: %v.", proxyAddr, err)
+		log.Warnf("Unable to dial to proxy: %v: %v.", proxyURL, err)
 		return nil, trace.ConvertSystemError(err)
 	}
 
@@ -192,7 +207,7 @@ func dialProxy(ctx context.Context, proxyAddr string, addr string) (net.Conn, er
 	}, nil
 }
 
-func getProxyAddress(addr string) string {
+func getProxyAddress(addr string) *url.URL {
 	envs := []string{
 		teleport.HTTPSProxy,
 		strings.ToLower(teleport.HTTPSProxy),
@@ -213,27 +228,27 @@ func getProxyAddress(addr string) string {
 		log.Debugf("Successfully parsed environment variable %q: %q to %q.", v, envAddr, proxyAddr)
 		if !useProxy(addr) {
 			log.Debugf("Matched NO_PROXY override for %q: %q, going to ignore proxy variable.", v, envAddr)
-			return ""
+			return nil
 		}
 		return proxyAddr
 	}
 
 	log.Debugf("No valid environment variables found.")
-	return ""
+	return nil
 }
 
 // parse will extract the host:port of the proxy to dial to. If the
 // value is not prefixed by "http", then it will prepend "http" and try.
-func parse(addr string) (string, error) {
+func parse(addr string) (*url.URL, error) {
 	proxyurl, err := url.Parse(addr)
 	if err != nil || !strings.HasPrefix(proxyurl.Scheme, "http") {
 		proxyurl, err = url.Parse("http://" + addr)
 		if err != nil {
-			return "", trace.Wrap(err)
+			return nil, trace.Wrap(err)
 		}
 	}
 
-	return proxyurl.Host, nil
+	return proxyurl, nil
 }
 
 // bufferedConn is used when part of the data on a connection has already been
