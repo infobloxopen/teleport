@@ -55,6 +55,8 @@ type Config struct {
 	UseCert    bool
 	GithubPath string
 	GithubAuto bool
+	RolePath   string
+	RoleAuto   bool
 
 	// DataDir provides directory where teleport stores it's permanent state
 	// (in case of auth server backed by BoltDB) or local state, e.g. keys

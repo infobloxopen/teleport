@@ -81,6 +81,12 @@ type CommandLineFlags struct {
 	// GithubAuto run teleport with github connector usage
 	// set by --with-github flag
 	GithubAuto bool
+	// RolePath loads RBAC resource from a file
+	// set by --role-path flag
+	RolePath string
+	// RoleAuto run teleport with roles usage
+	// set by --with-role flag
+	RoleAuto bool
 
 	// --name flag
 	NodeName string
@@ -1075,12 +1081,21 @@ func Configure(clf *CommandLineFlags, cfg *service.Config) error {
 	if clf.UseCert {
 		cfg.UseCert = clf.UseCert
 	}
+
 	if clf.GithubAuto {
 		cfg.GithubAuto = clf.GithubAuto
 	}
 
 	if clf.GithubPath != "" {
 		cfg.GithubPath = clf.GithubPath
+	}
+
+	if clf.RoleAuto {
+		cfg.RoleAuto = clf.RoleAuto
+	}
+
+	if clf.RolePath != "" {
+		cfg.RolePath = clf.RolePath
 	}
 
 	return nil

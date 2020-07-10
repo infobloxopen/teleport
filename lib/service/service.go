@@ -19,6 +19,7 @@ limitations under the License.
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -1123,6 +1124,15 @@ func (process *TeleportProcess) initAuthService() error {
 			log.Errorf("Could not Create Github connector: %v", err)
 		}
 	}
+
+	if process.Config.RoleAuto {
+		err := process.creatingNewRoles(process.Config.RolePath)
+		if err != nil {
+			log.Errorf("Could not Create new roles : %v", err)
+		}
+	}
+
+	return trace.Wrap(err)
 
 	// figure out server public address
 	authAddr := cfg.Auth.SSHAddr.Addr
@@ -2570,4 +2580,73 @@ func (process *TeleportProcess) creatingGithubConnector(path string) error {
 		log.Debugf("Github connector was created")
 		return nil
 	}
+}
+
+func (process *TeleportProcess) creatingNewRoles(path string) error {
+	if len(path) == 0 {
+		return trace.BadParameter("roles: roles path is not set")
+	}
+
+	reader, err := utils.OpenFile(path)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(reader)
+
+	roles := strings.Split(buf.String(), "##")
+
+	for i, r := range roles {
+		buf := new(bytes.Buffer)
+		buf.WriteString(r)
+
+		decoder := kyaml.NewYAMLOrJSONDecoder(buf, defaults.LookaheadBufSize)
+		count := 0
+
+		for {
+			var raw services.UnknownResource
+			err := decoder.Decode(&raw)
+			if err != nil {
+				if err == io.EOF {
+					if count == 0 {
+						log.Errorf(err.Error())
+						fmt.Println("idx ", i)
+						break
+					}
+					break
+				}
+
+				log.Errorf(err.Error())
+				break
+			}
+			count++
+
+			if raw.Kind != "role" {
+				log.Errorf("creating resources of type %q is only supported through tctl", raw.Kind)
+				break
+			}
+
+			role, err := services.GetRoleMarshaler().UnmarshalRole(raw.Raw)
+			if err != nil {
+				log.Errorf(err.Error())
+				break
+			}
+
+			if _, err := process.localAuth.GetRole(role.GetName()); err == nil {
+				log.Debugf("Delete role: %s", role.GetName())
+				process.localAuth.DeleteRole(role.GetName())
+			}
+
+			err = process.localAuth.CreateRole(role)
+			if err != nil {
+				log.Errorf(err.Error())
+				break
+			}
+
+			log.Debugf("%s role was created ", role.GetName())
+		}
+	}
+
+	return nil
 }
