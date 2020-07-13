@@ -18,7 +18,6 @@ RUN apt-get update && apt-get upgrade -y && \
 ADD teleport /usr/local/bin/teleport
 ADD tctl /usr/local/bin/tctl
 ADD tsh /usr/local/bin/tsh
-ADD teleport.yaml /etc/teleport/teleport.yaml
 
 # By setting this entry point, we expose make target as command.
 ENTRYPOINT ["/usr/bin/dumb-init", "teleport", "start", "-c", "/etc/teleport/teleport.yaml"]
