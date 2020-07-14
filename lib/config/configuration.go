@@ -84,8 +84,8 @@ type CommandLineFlags struct {
 	// RolePath loads RBAC resource from a file
 	// set by --role-path flag
 	RolePath string
-	// RoleAuto run teleport with roles usage
-	// set by --with-role flag
+	// RoleAuto runs teleport with roles usage
+	// set by --with-roles flag
 	RoleAuto bool
 
 	// --name flag

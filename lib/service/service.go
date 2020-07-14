@@ -1121,14 +1121,14 @@ func (process *TeleportProcess) initAuthService() error {
 	if process.Config.GithubAuto {
 		err := process.creatingGithubConnector(process.Config.GithubPath)
 		if err != nil {
-			log.Errorf("Could not Create Github connector: %v", err)
+			log.Errorf("Could not create Github connector: %v", err)
 		}
 	}
 
 	if process.Config.RoleAuto {
 		err := process.creatingNewRoles(process.Config.RolePath)
 		if err != nil {
-			log.Errorf("Could not Create new roles : %v", err)
+			log.Errorf("Could not create new roles : %v", err)
 		}
 	}
 
@@ -2553,7 +2553,7 @@ func (process *TeleportProcess) creatingGithubConnector(path string) error {
 		}
 		count++
 		if raw.Kind != "github" {
-			return trace.BadParameter("creating resources of type %q is only supported through tctl", raw.Kind)
+			return trace.BadParameter("Creating resources of type %q is only supported through tctl", raw.Kind)
 		}
 
 		connector, err := services.GetGithubConnectorMarshaler().Unmarshal(raw.Raw)
@@ -2597,7 +2597,7 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 
 	roles := strings.Split(buf.String(), "##")
 
-	for i, r := range roles {
+	for _, r := range roles {
 		buf := new(bytes.Buffer)
 		buf.WriteString(r)
 
@@ -2611,7 +2611,6 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 				if err == io.EOF {
 					if count == 0 {
 						log.Errorf(err.Error())
-						fmt.Println("idx ", i)
 						break
 					}
 					break
@@ -2623,7 +2622,7 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 			count++
 
 			if raw.Kind != "role" {
-				log.Errorf("creating resources of type %q is only supported through tctl", raw.Kind)
+				log.Errorf("Creating resources of type %q is only supported through tctl", raw.Kind)
 				break
 			}
 
@@ -2644,7 +2643,7 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 				break
 			}
 
-			log.Debugf("%s role was created ", role.GetName())
+			log.Debugf("The role was created: %s", role.GetName())
 		}
 	}
 
