@@ -2597,6 +2597,11 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 
 	roles := strings.Split(buf.String(), "##")
 
+	log.Debugf("Delete all users, before updaiting roles")
+	if err := process.localAuth.DeleteAllUsers(); err != nil {
+		return trace.BadParameter("Can not delete all users, before updaiting roles: %v", err)
+	}
+
 	for _, r := range roles {
 		buf := new(bytes.Buffer)
 		buf.WriteString(r)
@@ -2610,13 +2615,13 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 			if err != nil {
 				if err == io.EOF {
 					if count == 0 {
-						log.Errorf(err.Error())
+						log.Errorf("Decode:", err.Error())
 						break
 					}
 					break
 				}
 
-				log.Errorf(err.Error())
+				log.Errorf("Decode:", err.Error())
 				break
 			}
 			count++
@@ -2628,7 +2633,7 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 
 			role, err := services.GetRoleMarshaler().UnmarshalRole(raw.Raw)
 			if err != nil {
-				log.Errorf(err.Error())
+				log.Errorf("UnmarshalRole:", err.Error())
 				break
 			}
 
@@ -2639,7 +2644,7 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 
 			err = process.localAuth.CreateRole(role)
 			if err != nil {
-				log.Errorf(err.Error())
+				log.Errorf("CreateRole:", err.Error())
 				break
 			}
 

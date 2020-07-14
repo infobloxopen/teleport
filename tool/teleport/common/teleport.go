@@ -146,7 +146,7 @@ func Run(options Options) (executedCommand string, conf *service.Config) {
 	start.Flag("with-github", "create github resource automatically").
 		BoolVar(&ccf.GithubAuto)
 	start.Flag("role-path", "path to RBAC resource used for creating roles").
-		Default("/etc/teleport/role.yaml").
+		Default("/etc/teleport/roles.yaml").
 		StringVar(&ccf.RolePath)
 	start.Flag("with-roles", "create role resource automatically").
 		BoolVar(&ccf.RoleAuto)
