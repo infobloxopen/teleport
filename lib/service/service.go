@@ -1132,8 +1132,6 @@ func (process *TeleportProcess) initAuthService() error {
 		}
 	}
 
-	return trace.Wrap(err)
-
 	// figure out server public address
 	authAddr := cfg.Auth.SSHAddr.Addr
 	host, port, err := net.SplitHostPort(authAddr)
