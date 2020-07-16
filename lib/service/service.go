@@ -19,6 +19,7 @@ limitations under the License.
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -1120,9 +1121,18 @@ func (process *TeleportProcess) initAuthService() error {
 	if process.Config.GithubAuto {
 		err := process.creatingGithubConnector(process.Config.GithubPath)
 		if err != nil {
-			log.Errorf("Could not Create Github connector: %v", err)
+			log.Errorf("Could not create Github connector: %v", err)
 		}
 	}
+
+	if process.Config.RoleAuto {
+		err := process.creatingNewRoles(process.Config.RolePath)
+		if err != nil {
+			log.Errorf("Could not create new roles : %v", err)
+		}
+	}
+
+	return trace.Wrap(err)
 
 	// figure out server public address
 	authAddr := cfg.Auth.SSHAddr.Addr
@@ -2543,7 +2553,7 @@ func (process *TeleportProcess) creatingGithubConnector(path string) error {
 		}
 		count++
 		if raw.Kind != "github" {
-			return trace.BadParameter("creating resources of type %q is only supported through tctl", raw.Kind)
+			return trace.BadParameter("Creating resources of type %q is only supported through tctl", raw.Kind)
 		}
 
 		connector, err := services.GetGithubConnectorMarshaler().Unmarshal(raw.Raw)
@@ -2570,4 +2580,77 @@ func (process *TeleportProcess) creatingGithubConnector(path string) error {
 		log.Debugf("Github connector was created")
 		return nil
 	}
+}
+
+func (process *TeleportProcess) creatingNewRoles(path string) error {
+	if len(path) == 0 {
+		return trace.BadParameter("roles: roles path is not set")
+	}
+
+	reader, err := utils.OpenFile(path)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(reader)
+
+	roles := strings.Split(buf.String(), "##")
+
+	log.Debugf("Delete all users, before updaiting roles")
+	if err := process.localAuth.DeleteAllUsers(); err != nil {
+		return trace.BadParameter("Can not delete all users, before updaiting roles: %v", err)
+	}
+
+	for _, r := range roles {
+		buf := new(bytes.Buffer)
+		buf.WriteString(r)
+
+		decoder := kyaml.NewYAMLOrJSONDecoder(buf, defaults.LookaheadBufSize)
+		count := 0
+
+		for {
+			var raw services.UnknownResource
+			err := decoder.Decode(&raw)
+			if err != nil {
+				if err == io.EOF {
+					if count == 0 {
+						log.Errorf("Decode:", err.Error())
+						break
+					}
+					break
+				}
+
+				log.Errorf("Decode:", err.Error())
+				break
+			}
+			count++
+
+			if raw.Kind != "role" {
+				log.Errorf("Creating resources of type %q is only supported through tctl", raw.Kind)
+				break
+			}
+
+			role, err := services.GetRoleMarshaler().UnmarshalRole(raw.Raw)
+			if err != nil {
+				log.Errorf("UnmarshalRole:", err.Error())
+				break
+			}
+
+			if _, err := process.localAuth.GetRole(role.GetName()); err == nil {
+				log.Debugf("Delete role: %s", role.GetName())
+				process.localAuth.DeleteRole(role.GetName())
+			}
+
+			err = process.localAuth.CreateRole(role)
+			if err != nil {
+				log.Errorf("CreateRole:", err.Error())
+				break
+			}
+
+			log.Debugf("The role was created: %s", role.GetName())
+		}
+	}
+
+	return nil
 }

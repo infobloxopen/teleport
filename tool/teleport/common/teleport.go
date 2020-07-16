@@ -145,6 +145,11 @@ func Run(options Options) (executedCommand string, conf *service.Config) {
 		StringVar(&ccf.GithubPath)
 	start.Flag("with-github", "create github resource automatically").
 		BoolVar(&ccf.GithubAuto)
+	start.Flag("role-path", "path to RBAC resource used for creating roles").
+		Default("/etc/teleport/roles.yaml").
+		StringVar(&ccf.RolePath)
+	start.Flag("with-roles", "create role resource automatically").
+		BoolVar(&ccf.RoleAuto)
 	// define start's usage info (we use kingpin's "alias" field for this)
 	start.Alias(usageNotes + usageExamples)
 

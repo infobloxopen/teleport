@@ -307,6 +307,7 @@ type createUserParams struct {
 }
 
 func (s *AuthServer) calculateGithubUser(connector services.GithubConnector, claims *services.GithubClaims, request *services.GithubAuthRequest) (*createUserParams, error) {
+	logger := log.WithFields(logrus.Fields{trace.Component: "github role"})
 	p := createUserParams{
 		connectorName: connector.GetName(),
 		username:      claims.Username,
@@ -319,7 +320,19 @@ func (s *AuthServer) calculateGithubUser(connector services.GithubConnector, cla
 			"user %q does not belong to any teams configured in %q connector",
 			claims.Username, connector.GetName())
 	}
-	p.roles = modules.GetModules().RolesFromLogins(p.logins)
+
+	for _, login := range p.logins {
+		logger.Debugf("login : %s", login)
+		if _, err := s.GetRole(login); err == nil {
+			p.roles = append(
+				p.roles, login)
+		}
+	}
+
+	if len(p.roles) == 0 {
+		p.roles = modules.GetModules().RolesFromLogins(p.logins)
+	}
+
 	p.traits = modules.GetModules().TraitsFromLogins(p.logins, p.kubeGroups, p.kubeUsers)
 
 	// Pick smaller for role: session TTL from role or requested TTL.
