@@ -635,8 +635,6 @@ func (c *Client) RegisterUsingToken(req RegisterUsingTokenRequest) (*PackedKeys,
 
 // RegisterUsingCert calls the auth service API to register a new node using ibCert
 func (c *Client) RegisterUsingCert(req RegisterUsingCertRequest) (*PackedKeys, error) {
-	log.Debugln("[RegisterUsingCert] start")
-
 	out, err := c.PostJSON(c.Endpoint("ibcert", "register"), req)
 	if err != nil {
 		log.Debugf("[RegisterUsingCert] err %v", err)
@@ -646,8 +644,6 @@ func (c *Client) RegisterUsingCert(req RegisterUsingCertRequest) (*PackedKeys, e
 	if err := json.Unmarshal(out.Bytes(), &keys); err != nil {
 		return nil, trace.Wrap(err)
 	}
-
-	log.Debugln("[RegisterUsingCert] finish")
 	return &keys, nil
 }
 

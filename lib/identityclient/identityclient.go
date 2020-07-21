@@ -99,20 +99,22 @@ func WithTimeout(timeout time.Duration) IdentityClientOption {
 
 // ValidateIBCertViaCA takes a provisioning ibCert and validate it via CA.
 func ValidateIBCertViaCA(IBCert []byte, ibCA *x509.CertPool) error {
-	log.Debugf("[ValidateCert CA]")
+	log.Debugln("[ValidateCert] via CA")
 
 	opts := x509.VerifyOptions{
 		Roots: ibCA,
 	}
 
 	pemBlock, _ := pem.Decode(IBCert)
+	if pemBlock == nil {
+		return trace.BadParameter("cert: expected PEM-encoded block")
+	}
 
 	cert, err := x509.ParseCertificate(pemBlock.Bytes)
 	if err != nil {
 		return err
 	}
 
-	log.Debugln("[ValidateCert CA] validate via aws-pca")
 	if _, err := cert.Verify(opts); err != nil {
 		return err
 	}
@@ -122,7 +124,7 @@ func ValidateIBCertViaCA(IBCert []byte, ibCA *x509.CertPool) error {
 
 // ValidateIBCertViaIdentity takes a provisioning ibCert and validate it via identity.
 func ValidateIBCertViaIdentity(IBCert []byte, ophid string) error {
-	log.Debugf("[ValidateCert] start")
+	log.Debugf("[ValidateCert] via identity")
 
 	//	iClient := NewIdentityClient(WithAuthURL("http://127.0.0.1:31824/v2/session/verify"))
 	iClient := NewIdentityClient()
@@ -134,9 +136,7 @@ func ValidateIBCertViaIdentity(IBCert []byte, ophid string) error {
 	header.Add(SSLClientSubjectDNHeader, "CN="+ophid)
 	header.Add(SSLClientCert, strings.Trim(url.Values{shortName: {string(IBCert)}}.Encode(), shortName+"="))
 
-	rh, err := iClient.Verify(ctx, header)
-
-	log.Debugf("[ValidateCert] finish %v %v", rh, err)
+	_, err := iClient.Verify(ctx, header)
 
 	return err
 }
