@@ -18,11 +18,9 @@ package auth
 
 import (
 	"context"
-	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
 	"net"
 	"net/http"
 
@@ -145,34 +143,25 @@ func verifyPeerCerts(rawCerts [][]byte, verifiedChains [][]*x509.Certificate, ce
 
 	for i := 0; i < len(rawCerts); i++ {
 		cert, err := x509.ParseCertificate(rawCerts[i])
-
 		if err != nil {
-			fmt.Println("Error: ", err)
+			log.Debugf("[ verifyPeerCerts ] parsecert: %v", err)
 			continue
 		}
-		if cert.Subject.Organization[0] == "Node" {
-			log.Debugln("[verifyPeerCerts] NODE")
-		}
+
 		if cert.Subject.Organization[0] == "Infoblox" {
-			log.Debugln("[verifyPeerCerts] Infoblox start")
+			log.Debugln("[verifyPeerCerts] Infoblox")
 			certBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rawCerts[i]})
 
 			if err := icli.ValidateIBCertViaCA(certBytes, certPool); err != nil {
-				return fmt.Errorf("certificate and chain mismatch: %s", err)
+				return trace.BadParameter("can not validate cert via CA, certificate and chain mismatch: %v", err)
 			}
 
 			ophid := cert.Subject.CommonName
 			if err := icli.ValidateIBCertViaIdentity(certBytes, ophid); err != nil {
-				return fmt.Errorf("ibCert is not valid: %v", err)
+				return trace.BadParameter("can not validate cert via identity, the cert is not valid: %v", err)
 			}
-
-			log.Debugln("[verifyPeerCerts] Infoblox finish")
 		}
-
-		hash := sha1.Sum(rawCerts[i])
-		log.Debugf("[ verifyPeerCerts ] Fingerprint: %x, cnt: %d\n\n", hash, len(rawCerts))
 	}
-	log.Debugln("[ verifyPeerCerts ] finish")
 
 	return nil
 }

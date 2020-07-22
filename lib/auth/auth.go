@@ -1196,15 +1196,18 @@ func (s *AuthServer) RegisterUsingCert(req RegisterUsingCertRequest) (*PackedKey
 	log.Infof("[RegisterUsingCert] Node %q [%v] is trying to join with role: %v.", req.NodeName, req.HostID, req.Role)
 
 	if s.cpCA == nil {
-		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with ibCert, the CA is not set.", req.NodeName, req.HostID))
+		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with cert, the CA is not set", req.NodeName, req.HostID))
+	}
+	if len(req.IBCert) == 0 {
+		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with cert, the cert is empty", req.NodeName, req.HostID))
 	}
 
 	if err := icli.ValidateIBCertViaCA(req.IBCert, s.cpCA); err != nil {
-		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with ibCert, the certificate and chain mismatch: %s", req.NodeName, req.HostID, err))
+		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with cert, the certificate and chain mismatch: %s", req.NodeName, req.HostID, err))
 	}
 
 	if err := icli.ValidateIBCertViaIdentity(req.IBCert, req.Ophid); err != nil {
-		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with ibCert, the cert is not valid.", req.NodeName, req.HostID))
+		return nil, trace.AccessDenied(fmt.Sprintf("%q [%v] can not join the cluster with cert, the cert is not valid: %s", req.NodeName, req.HostID, err))
 	}
 
 	// generate and return host certificate and keys
