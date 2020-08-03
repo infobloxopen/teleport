@@ -142,6 +142,17 @@ func (a *AuthWithRoles) AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLog
 	return a.authServer.AuthenticateSSHUser(req)
 }
 
+// AuthenticateSSHUserS2S authenticates SSH console user, creates and  returns a pair of signed TLS and SSH
+// short lived certificates as a result
+func (a *AuthWithRoles) AuthenticateSSHUserS2S(req AuthenticateSSHRequest) (*SSHLoginResponse, error) {
+	// authentication request has it's own authentication, however this limits the requests
+	// types to proxies to make it harder to break
+	if !a.hasBuiltinRole(string(teleport.RoleProxy)) {
+		return nil, trace.AccessDenied("this request can be only executed by a proxy")
+	}
+	return a.authServer.AuthenticateSSHUserS2S(req)
+}
+
 func (a *AuthWithRoles) GetSessions(namespace string) ([]session.Session, error) {
 	if err := a.action(namespace, services.KindSSHSession, services.VerbList); err != nil {
 		return nil, trace.Wrap(err)

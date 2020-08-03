@@ -171,6 +171,9 @@ func NewHandler(cfg Config, opts ...HandlerOption) (*RewritingHandler, error) {
 	// Issues SSH temp certificates based on 2FA access creds
 	h.POST("/webapi/ssh/certs", httplib.MakeHandler(h.createSSHCert))
 
+	// Issues SSH temp certificates based on S2S access creds
+	h.POST("/webapi/service/certs", httplib.MakeHandler(h.createServiceCert))
+
 	// list available sites
 	h.GET("/webapi/sites", h.WithAuth(h.getClusters))
 
@@ -1919,6 +1922,50 @@ func (h *Handler) createSSHCert(w http.ResponseWriter, r *http.Request, p httpro
 			req.OTPToken = req.HOTPToken
 		}
 		cert, err = h.auth.GetCertificateWithOTP(*req)
+	default:
+		return nil, trace.AccessDenied("unknown second factor type: %q", cap.GetSecondFactor())
+	}
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	return cert, nil
+}
+
+// createServiceCert is a web call that generates new SSH certificate based
+// on user's name, password, S2S token and public key user wishes to sign
+//
+// POST /v1/webapi/service/certs
+//
+// { "user": "bob", "password": "pass", "pub_key": "key to sign", "ttl": 1000000000 }
+//
+// Success response
+//
+// { "cert": "base64 encoded signed cert", "host_signers": [{"domain_name": "example.com", "checking_keys": ["base64 encoded public signing key"]}] }
+//
+func (h *Handler) createServiceCert(w http.ResponseWriter, r *http.Request, p httprouter.Params) (interface{}, error) {
+	var req *client.CreateSSHCertReq
+	if err := httplib.ReadJSON(r, &req); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	authClient := h.cfg.ProxyClient
+	cap, err := authClient.GetAuthPreference()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	var cert *auth.SSHLoginResponse
+
+	switch cap.GetSecondFactor() {
+	case teleport.OFF:
+		cert, err = h.auth.GetCertificateWithoutOTP(*req)
+	case teleport.OTP, teleport.HOTP, teleport.TOTP:
+		// convert legacy requests to new parameter here. remove once migration to TOTP is complete.
+		if req.HOTPToken != "" {
+			req.OTPToken = req.HOTPToken
+		}
+		cert, err = h.auth.GetCertificateWithS2S(*req)
 	default:
 		return nil, trace.AccessDenied("unknown second factor type: %q", cap.GetSecondFactor())
 	}

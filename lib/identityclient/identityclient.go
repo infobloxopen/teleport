@@ -140,3 +140,20 @@ func ValidateIBCertViaIdentity(IBCert []byte, ophid string) error {
 
 	return err
 }
+
+// ValidateS2SViaIdentity takes a provisioning S2S and validate it via identity.
+func ValidateS2SViaIdentity(jwt string) error {
+	log.Debugf("[ValidateS2S] start")
+
+	iClient := NewIdentityClient()
+	ctx := context.Background()
+
+	header := http.Header{}
+	header.Add("authorization", jwt)
+
+	_, err := iClient.Verify(ctx, header)
+
+	log.Debugf("[ValidateS2S] finish")
+
+	return err
+}

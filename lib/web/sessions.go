@@ -456,6 +456,22 @@ func (s *sessionCache) GetCertificateWithOTP(c client.CreateSSHCertReq) (*auth.S
 
 }
 
+func (s *sessionCache) GetCertificateWithS2S(c client.CreateSSHCertReq) (*auth.SSHLoginResponse, error) {
+	return s.proxyClient.AuthenticateSSHUserS2S(auth.AuthenticateSSHRequest{
+		AuthenticateUserRequest: auth.AuthenticateUserRequest{
+			Username: c.User,
+			OTP: &auth.OTPCreds{
+				Password: []byte(c.Password),
+				Token:    c.OTPToken,
+			},
+		},
+		PublicKey:         c.PubKey,
+		CompatibilityMode: c.Compatibility,
+		TTL:               c.TTL,
+	})
+
+}
+
 func (s *sessionCache) GetCertificateWithU2F(c client.CreateSSHCertWithU2FReq) (*auth.SSHLoginResponse, error) {
 	return s.proxyClient.AuthenticateSSHUser(auth.AuthenticateSSHRequest{
 		AuthenticateUserRequest: auth.AuthenticateUserRequest{

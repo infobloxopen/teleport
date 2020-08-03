@@ -351,6 +351,69 @@ func (s *AuthServer) AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLoginR
 	}, nil
 }
 
+// AuthenticateSSHUserS2S authenticates service user, creates and  returns web session
+// in case if authentication is successful
+func (s *AuthServer) AuthenticateSSHUserS2S(req AuthenticateSSHRequest) (*SSHLoginResponse, error) {
+	clusterConfig, err := s.GetClusterConfig()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	if clusterConfig.GetLocalAuth() == false {
+		s.emitNoLocalAuthEvent(req.Username)
+		return nil, trace.AccessDenied(noLocalAuth)
+	}
+
+	clusterName, err := s.GetClusterName()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	//if err := s.AuthenticateUser(req.AuthenticateUserRequest); err != nil {
+	//      return nil, trace.Wrap(err)
+	//}
+
+	// It's safe to extract the roles and traits directly from services.User as
+	// this endpoint is only used for local accounts.
+	user, err := s.GetUser(req.Username, false)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	checker, err := services.FetchRoles(user.GetRoles(), s, user.GetTraits())
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	// Return the host CA for this cluster only.
+	authority, err := s.GetCertAuthority(services.CertAuthID{
+		Type:       services.HostCA,
+		DomainName: clusterName.GetClusterName(),
+	}, false)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	hostCertAuthorities := []services.CertAuthority{
+		authority,
+	}
+
+	certs, err := s.generateUserCert(certRequest{
+		user:          user,
+		ttl:           req.TTL,
+		publicKey:     req.PublicKey,
+		compatibility: req.CompatibilityMode,
+		checker:       checker,
+		traits:        user.GetTraits(),
+	})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return &SSHLoginResponse{
+		Username:    req.Username,
+		Cert:        certs.ssh,
+		TLSCert:     certs.tls,
+		HostSigners: AuthoritiesToTrustedCerts(hostCertAuthorities),
+	}, nil
+}
+
 // emitNoLocalAuthEvent creates and emits a local authentication is disabled message.
 func (s *AuthServer) emitNoLocalAuthEvent(username string) {
 	fields := events.EventFields{

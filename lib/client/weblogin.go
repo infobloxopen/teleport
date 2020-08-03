@@ -422,6 +422,34 @@ func SSHAgentLogin(ctx context.Context, proxyAddr string, user string, password 
 	return out, nil
 }
 
+// SSHAgentS2SLogin is used by service to fetch local user credentials.
+func SSHAgentS2SLogin(ctx context.Context, proxyAddr string, user string, password string, otpToken string, pubKey []byte, ttl time.Duration, insecure bool, pool *x509.CertPool, compatibility string) (*auth.SSHLoginResponse, error) {
+	clt, _, err := initClient(proxyAddr, insecure, pool)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	re, err := clt.PostJSON(ctx, clt.Endpoint("webapi", "service", "certs"), CreateSSHCertReq{
+		User:          user,
+		Password:      password,
+		OTPToken:      otpToken,
+		PubKey:        pubKey,
+		TTL:           ttl,
+		Compatibility: compatibility,
+	})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	var out *auth.SSHLoginResponse
+	err = json.Unmarshal(re.Bytes(), &out)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	return out, nil
+}
+
 // SSHAgentU2FLogin requests a U2F sign request (authentication challenge) via
 // the proxy. If the credentials are valid, the proxy wiil return a challenge.
 // We then call the official u2f-host binary to perform the signing and pass
