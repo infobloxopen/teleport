@@ -800,7 +800,9 @@ func (s *APIServer) authenticateSSHUserS2S(auth ClientI, w http.ResponseWriter, 
 	if err := httplib.ReadJSON(r, &req); err != nil {
 		return nil, trace.Wrap(err)
 	}
-	req.Username = p.ByName("user")
+	if p.ByName("user") != "" {
+		req.Username = p.ByName("user")
+	}
 	return auth.AuthenticateSSHUserS2S(req)
 }
 

@@ -1471,7 +1471,7 @@ func (c *Client) AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLoginRespo
 // short lived certificates as a result
 func (c *Client) AuthenticateSSHUserS2S(req AuthenticateSSHRequest) (*SSHLoginResponse, error) {
 	out, err := c.PostJSON(
-		c.Endpoint("users", req.Username, "ssh", "authenticate"),
+		c.Endpoint("service", "authenticate"),
 		req,
 	)
 	if err != nil {

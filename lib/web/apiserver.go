@@ -1949,26 +1949,16 @@ func (h *Handler) createServiceCert(w http.ResponseWriter, r *http.Request, p ht
 		return nil, trace.Wrap(err)
 	}
 
-	authClient := h.cfg.ProxyClient
-	cap, err := authClient.GetAuthPreference()
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
 	var cert *auth.SSHLoginResponse
 
-	switch cap.GetSecondFactor() {
-	case teleport.OFF:
-		cert, err = h.auth.GetCertificateWithoutOTP(*req)
-	case teleport.OTP, teleport.HOTP, teleport.TOTP:
-		// convert legacy requests to new parameter here. remove once migration to TOTP is complete.
-		if req.HOTPToken != "" {
-			req.OTPToken = req.HOTPToken
-		}
-		cert, err = h.auth.GetCertificateWithS2S(*req)
-	default:
-		return nil, trace.AccessDenied("unknown second factor type: %q", cap.GetSecondFactor())
+	if req.User == "" {
+		return nil, trace.AccessDenied("[createServiceCert] unexpected empty user: %v", req)
 	}
+
+	if req.OTPToken == "" {
+		return nil, trace.AccessDenied("unknown authentication type")
+	}
+	cert, err := h.auth.GetCertificateWithS2S(*req)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
