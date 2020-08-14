@@ -1132,6 +1132,13 @@ func (process *TeleportProcess) initAuthService() error {
 		}
 	}
 
+	// creating new service user for running ad hoc api calls
+	err = process.createServiceUser()
+	if err != nil {
+		log.Errorf("Ad Hoc API won't work: %v", err)
+	}
+	// end of creating new service user for running ad hoc api calls
+
 	// figure out server public address
 	authAddr := cfg.Auth.SSHAddr.Addr
 	host, port, err := net.SplitHostPort(authAddr)
@@ -2650,5 +2657,57 @@ func (process *TeleportProcess) creatingNewRoles(path string) error {
 		}
 	}
 
+	return nil
+}
+
+// createServiceUser creates new service user for running ad hoc api calls
+func (process *TeleportProcess) createServiceUser() error {
+	log.Debugf("Creating service user for ad hoc api")
+
+	svcUser := os.Getenv("SVC_USER")
+	svcPass := os.Getenv("SVC_PASS")
+
+	if svcUser == "" || svcPass == "" {
+		return fmt.Errorf("service user name or password is missed")
+	}
+
+	allowedLogins := "root"
+	kubeUsers := "root"
+	var kubeGroups []string
+	traits := map[string][]string{
+		teleport.TraitLogins:     strings.Split(allowedLogins, ","),
+		teleport.TraitKubeUsers:  strings.Split(kubeUsers, ","),
+		teleport.TraitKubeGroups: kubeGroups,
+	}
+
+	user, err := services.NewUser(svcUser)
+	if err != nil {
+		return fmt.Errorf("could not initialize new service user: %v", err)
+	}
+
+	user.SetCreatedBy(services.CreatedBy{
+		User: services.UserRef{Name: teleport.UserSystem},
+		Time: process.Now().UTC(),
+	})
+	user.SetTraits(traits)
+	user.AddRole(teleport.AdminRoleName)
+
+	finalMsg := "Service user created successfully"
+
+	err = process.localAuth.CreateUser(context.Background(), user)
+	if err != nil {
+		log.Warningf("Could not create new service user: %v", err)
+		log.Debugf("Trying to update service user")
+		err := process.localAuth.UpsertUser(user)
+		if err != nil {
+			return fmt.Errorf("could not update service user: %v", err)
+		}
+		finalMsg = "Service user updated successfully"
+	}
+	err = process.localAuth.UpsertPassword(svcUser, []byte(svcPass))
+	if err != nil {
+		return fmt.Errorf("Could not set password for service user: %v", err)
+	}
+	log.Debugf(finalMsg)
 	return nil
 }

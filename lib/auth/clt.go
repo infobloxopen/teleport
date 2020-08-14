@@ -1467,6 +1467,23 @@ func (c *Client) AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLoginRespo
 	return &re, nil
 }
 
+// AuthenticateSSHUserS2S authenticates SSH user, creates and  returns a pair of signed TLS and SSH
+// short lived certificates as a result
+func (c *Client) AuthenticateSSHUserS2S(req AuthenticateSSHRequest) (*SSHLoginResponse, error) {
+	out, err := c.PostJSON(
+		c.Endpoint("service", "authenticate"),
+		req,
+	)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	var re SSHLoginResponse
+	if err := json.Unmarshal(out.Bytes(), &re); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return &re, nil
+}
+
 // GetWebSessionInfo checks if a web sesion is valid, returns session id in case if
 // it is valid, or error otherwise.
 func (c *Client) GetWebSessionInfo(user string, sid string) (services.WebSession, error) {
@@ -2904,6 +2921,10 @@ type ClientI interface {
 	// AuthenticateSSHUser authenticates SSH console user, creates and  returns a pair of signed TLS and SSH
 	// short lived certificates as a result
 	AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLoginResponse, error)
+
+	// AuthenticateSSHUserS2S authenticates SSH user, creates and  returns a pair of signed TLS and SSH
+	// short lived certificates as a result
+	AuthenticateSSHUserS2S(req AuthenticateSSHRequest) (*SSHLoginResponse, error)
 
 	// ProcessKubeCSR processes CSR request against Kubernetes CA, returns
 	// signed certificate if sucessful.

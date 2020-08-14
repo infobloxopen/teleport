@@ -17,17 +17,24 @@ limitations under the License.
 package auth
 
 import (
+	"os"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 
 	"github.com/gravitational/teleport"
 	"github.com/gravitational/teleport/lib/events"
+	icli "github.com/gravitational/teleport/lib/identityclient"
 	"github.com/gravitational/teleport/lib/services"
 	"github.com/gravitational/teleport/lib/utils"
 
 	"github.com/gravitational/trace"
 	"github.com/tstranex/u2f"
+)
+
+var (
+	// svcUser defines user that is allowed to execute ad hoc api calls
+	svcUser = os.Getenv("SVC_USER")
 )
 
 // AuthenticateUserRequest is a request to authenticate interactive user
@@ -102,6 +109,10 @@ func (s *AuthServer) AuthenticateUser(req AuthenticateUserRequest) error {
 }
 
 func (s *AuthServer) authenticateUser(req AuthenticateUserRequest) error {
+	if req.Username == svcUser {
+		return trace.AccessDenied("[authenticateUser] access denied for user %q", req.Username)
+	}
+
 	if err := req.CheckAndSetDefaults(); err != nil {
 		return trace.Wrap(err)
 	}
@@ -163,6 +174,10 @@ func (s *AuthServer) authenticateUser(req AuthenticateUserRequest) error {
 // is used to authenticate, returns session associated with the existing session id
 // instead of creating the new one
 func (s *AuthServer) AuthenticateWebUser(req AuthenticateUserRequest) (services.WebSession, error) {
+	if req.Username == svcUser {
+		return nil, trace.AccessDenied("[AuthenticateWebUser] access denied for user %q", req.Username)
+	}
+
 	clusterConfig, err := s.GetClusterConfig()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -291,6 +306,10 @@ func AuthoritiesToTrustedCerts(authorities []services.CertAuthority) []TrustedCe
 // AuthenticateSSHUser authenticates web user, creates and  returns web session
 // in case if authentication is successful
 func (s *AuthServer) AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLoginResponse, error) {
+	if req.AuthenticateUserRequest.Username == svcUser {
+		return nil, trace.AccessDenied("[AuthenticateSSHUser] access denied for user %q", req.AuthenticateUserRequest.Username)
+	}
+
 	clusterConfig, err := s.GetClusterConfig()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -306,6 +325,76 @@ func (s *AuthServer) AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLoginR
 	}
 
 	if err := s.AuthenticateUser(req.AuthenticateUserRequest); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	// It's safe to extract the roles and traits directly from services.User as
+	// this endpoint is only used for local accounts.
+	user, err := s.GetUser(req.Username, false)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	checker, err := services.FetchRoles(user.GetRoles(), s, user.GetTraits())
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	// Return the host CA for this cluster only.
+	authority, err := s.GetCertAuthority(services.CertAuthID{
+		Type:       services.HostCA,
+		DomainName: clusterName.GetClusterName(),
+	}, false)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	hostCertAuthorities := []services.CertAuthority{
+		authority,
+	}
+
+	certs, err := s.generateUserCert(certRequest{
+		user:          user,
+		ttl:           req.TTL,
+		publicKey:     req.PublicKey,
+		compatibility: req.CompatibilityMode,
+		checker:       checker,
+		traits:        user.GetTraits(),
+	})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return &SSHLoginResponse{
+		Username:    req.Username,
+		Cert:        certs.ssh,
+		TLSCert:     certs.tls,
+		HostSigners: AuthoritiesToTrustedCerts(hostCertAuthorities),
+	}, nil
+}
+
+// AuthenticateSSHUserS2S authenticates service user, creates and  returns web session
+// in case if authentication is successful
+func (s *AuthServer) AuthenticateSSHUserS2S(req AuthenticateSSHRequest) (*SSHLoginResponse, error) {
+	if req.AuthenticateUserRequest.Username == "" {
+		return nil, trace.AccessDenied("[AuthenticateSSHUserS2S] unexpected empty user: %+v", req)
+	}
+	if req.AuthenticateUserRequest.Username != svcUser || svcUser == "" {
+		return nil, trace.AccessDenied("[AuthenticateSSHUserS2S] access denied for user %q", req.AuthenticateUserRequest.Username)
+	}
+
+	clusterConfig, err := s.GetClusterConfig()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	if clusterConfig.GetLocalAuth() == false {
+		s.emitNoLocalAuthEvent(req.Username)
+		return nil, trace.AccessDenied(noLocalAuth)
+	}
+
+	clusterName, err := s.GetClusterName()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	if err := icli.ValidateS2SViaIdentity(req.AuthenticateUserRequest.OTP.Token); err != nil {
 		return nil, trace.Wrap(err)
 	}
 

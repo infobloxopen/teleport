@@ -103,6 +103,7 @@ func NewAPIServer(config *APIConfig) http.Handler {
 	srv.GET("/:version/users/:user/web/sessions/:sid", srv.withAuth(srv.getWebSession))
 	srv.DELETE("/:version/users/:user/web/sessions/:sid", srv.withAuth(srv.deleteWebSession))
 	srv.POST("/:version/web/password/token", srv.withRate(srv.withAuth(srv.changePasswordWithToken)))
+	srv.POST("/:version/service/authenticate", srv.withAuth(srv.authenticateSSHUserS2S))
 
 	// Servers and presence heartbeat
 	srv.POST("/:version/namespaces/:namespace/nodes", srv.withAuth(srv.upsertNode))
@@ -792,6 +793,17 @@ func (s *APIServer) authenticateSSHUser(auth ClientI, w http.ResponseWriter, r *
 	}
 	req.Username = p.ByName("user")
 	return auth.AuthenticateSSHUser(req)
+}
+
+func (s *APIServer) authenticateSSHUserS2S(auth ClientI, w http.ResponseWriter, r *http.Request, p httprouter.Params, version string) (interface{}, error) {
+	var req AuthenticateSSHRequest
+	if err := httplib.ReadJSON(r, &req); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	if p.ByName("user") != "" {
+		req.Username = p.ByName("user")
+	}
+	return auth.AuthenticateSSHUserS2S(req)
 }
 
 func (s *APIServer) changePassword(auth ClientI, w http.ResponseWriter, r *http.Request, p httprouter.Params, version string) (interface{}, error) {

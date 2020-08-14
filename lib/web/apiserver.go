@@ -171,6 +171,9 @@ func NewHandler(cfg Config, opts ...HandlerOption) (*RewritingHandler, error) {
 	// Issues SSH temp certificates based on 2FA access creds
 	h.POST("/webapi/ssh/certs", httplib.MakeHandler(h.createSSHCert))
 
+	// Issues SSH temp certificates based on S2S access creds
+	h.POST("/webapi/service/certs", httplib.MakeHandler(h.createServiceCert))
+
 	// list available sites
 	h.GET("/webapi/sites", h.WithAuth(h.getClusters))
 
@@ -1922,6 +1925,40 @@ func (h *Handler) createSSHCert(w http.ResponseWriter, r *http.Request, p httpro
 	default:
 		return nil, trace.AccessDenied("unknown second factor type: %q", cap.GetSecondFactor())
 	}
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	return cert, nil
+}
+
+// createServiceCert is a web call that generates new SSH certificate based
+// on user's name, password, S2S token and public key user wishes to sign
+//
+// POST /v1/webapi/service/certs
+//
+// { "user": "bob", "password": "pass", "pub_key": "key to sign", "ttl": 1000000000 }
+//
+// Success response
+//
+// { "cert": "base64 encoded signed cert", "host_signers": [{"domain_name": "example.com", "checking_keys": ["base64 encoded public signing key"]}] }
+//
+func (h *Handler) createServiceCert(w http.ResponseWriter, r *http.Request, p httprouter.Params) (interface{}, error) {
+	var req *client.CreateSSHCertReq
+	if err := httplib.ReadJSON(r, &req); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	var cert *auth.SSHLoginResponse
+
+	if req.User == "" {
+		return nil, trace.AccessDenied("[createServiceCert] unexpected empty user: %v", req)
+	}
+
+	if req.OTPToken == "" {
+		return nil, trace.AccessDenied("unknown authentication type")
+	}
+	cert, err := h.auth.GetCertificateWithS2S(*req)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
