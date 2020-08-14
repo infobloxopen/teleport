@@ -110,7 +110,7 @@ func (s *AuthServer) AuthenticateUser(req AuthenticateUserRequest) error {
 
 func (s *AuthServer) authenticateUser(req AuthenticateUserRequest) error {
 	if req.Username == svcUser {
-		return trace.AccessDenied("[authenticateUser] access denied for user %v (expected %v)", req.Username, svcUser)
+		return trace.AccessDenied("[authenticateUser] access denied for user %q", req.Username)
 	}
 
 	if err := req.CheckAndSetDefaults(); err != nil {
@@ -175,7 +175,7 @@ func (s *AuthServer) authenticateUser(req AuthenticateUserRequest) error {
 // instead of creating the new one
 func (s *AuthServer) AuthenticateWebUser(req AuthenticateUserRequest) (services.WebSession, error) {
 	if req.Username == svcUser {
-		return nil, trace.AccessDenied("[AuthenticateWebUser] access denied for user %v (expected %v)", req.Username, svcUser)
+		return nil, trace.AccessDenied("[AuthenticateWebUser] access denied for user %q", req.Username)
 	}
 
 	clusterConfig, err := s.GetClusterConfig()
@@ -307,7 +307,7 @@ func AuthoritiesToTrustedCerts(authorities []services.CertAuthority) []TrustedCe
 // in case if authentication is successful
 func (s *AuthServer) AuthenticateSSHUser(req AuthenticateSSHRequest) (*SSHLoginResponse, error) {
 	if req.AuthenticateUserRequest.Username == svcUser {
-		return nil, trace.AccessDenied("[AuthenticateSSHUser] access denied for user %v", req.AuthenticateUserRequest.Username)
+		return nil, trace.AccessDenied("[AuthenticateSSHUser] access denied for user %q", req.AuthenticateUserRequest.Username)
 	}
 
 	clusterConfig, err := s.GetClusterConfig()
@@ -376,8 +376,8 @@ func (s *AuthServer) AuthenticateSSHUserS2S(req AuthenticateSSHRequest) (*SSHLog
 	if req.AuthenticateUserRequest.Username == "" {
 		return nil, trace.AccessDenied("[AuthenticateSSHUserS2S] unexpected empty user: %+v", req)
 	}
-	if req.AuthenticateUserRequest.Username != svcUser {
-		return nil, trace.AccessDenied("[AuthenticateSSHUserS2S] access denied for user %v (expected %v)", req.AuthenticateUserRequest.Username, svcUser)
+	if req.AuthenticateUserRequest.Username != svcUser || svcUser == "" {
+		return nil, trace.AccessDenied("[AuthenticateSSHUserS2S] access denied for user %q", req.AuthenticateUserRequest.Username)
 	}
 
 	clusterConfig, err := s.GetClusterConfig()
