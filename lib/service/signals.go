@@ -158,6 +158,9 @@ var ErrTeleportReloading = &trace.CompareFailedError{Message: "teleport process 
 // ErrTeleportExited means that teleport has exited
 var ErrTeleportExited = &trace.CompareFailedError{Message: "teleport process has shutdown"}
 
+// ErrTeleportNotFoundKeys means that teleport gets specific response
+var ErrTeleportNotFoundKeys = &trace.CompareFailedError{Message: "teleport process has shutdown due to not found matching keys "}
+
 // ErrTeleportPanic means that teleport has exited
 var ErrTeleportPanic = &trace.CompareFailedError{Message: "teleport process has shutdown"}
 

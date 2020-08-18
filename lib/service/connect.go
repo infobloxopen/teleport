@@ -19,6 +19,7 @@ package service
 import (
 	"crypto/tls"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -65,6 +66,16 @@ func (process *TeleportProcess) reconnectToAuthService(role teleport.Role) (*Con
 		// Wait in between attempts, but return if teleport is shutting down
 		select {
 		case <-time.After(retryTime):
+			if isNotKeysFoundProblem(err) {
+				err := os.RemoveAll(process.Config.Auth.StorageConfig.Params["data_dir"].(string))
+				if err != nil {
+					log.Error("failed removing Teleport data directory", err)
+				}
+
+				log.Debugln("[reconnectToAuthService] clean up data directory")
+
+				return nil, ErrTeleportNotFoundKeys
+			}
 		case <-process.ExitContext().Done():
 			process.Infof("%v stopping connection attempts, teleport is shutting down.", role)
 			return nil, ErrTeleportExited
@@ -504,6 +515,15 @@ func (process *TeleportProcess) periodicSyncRotationState() error {
 // isBadCertificateProblem returns whether this error is of bad certificate
 func isBadCertificateProblem(e error) bool {
 	if !strings.Contains(e.Error(), "bad certificate") {
+		return false
+	}
+
+	return true
+}
+
+// isNotKeysFoundProblem returns whether this error is of no matching keys found
+func isNotKeysFoundProblem(e error) bool {
+	if !strings.Contains(e.Error(), "no matching keys found") {
 		return false
 	}
 
