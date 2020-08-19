@@ -66,15 +66,10 @@ func (process *TeleportProcess) reconnectToAuthService(role teleport.Role) (*Con
 		// Wait in between attempts, but return if teleport is shutting down
 		select {
 		case <-time.After(retryTime):
-			if isNotKeysFoundProblem(err) {
-				err := os.RemoveAll(process.Config.Auth.StorageConfig.Params["data_dir"].(string))
-				if err != nil {
-					log.Error("failed removing Teleport data directory", err)
-				}
+			if isKeysNotFoundProblem(err) {
+				process.clearDataFolder()
 
-				log.Debugln("[reconnectToAuthService] clean up data directory")
-
-				return nil, ErrTeleportNotFoundKeys
+				return nil, ErrTeleportKeysNotFound
 			}
 		case <-process.ExitContext().Done():
 			process.Infof("%v stopping connection attempts, teleport is shutting down.", role)
@@ -498,6 +493,12 @@ func (process *TeleportProcess) periodicSyncRotationState() error {
 			return nil
 		}
 
+		if isKeysNotFoundProblem(err) {
+			process.clearDataFolder()
+
+			return ErrTeleportKeysNotFound
+		}
+
 		if cntRetry > process.Config.RetryCnt {
 			process.Debugf("[periodicSyncRotationState] The service is terminated. Retry period: %v, retry count: %v ", process.Config.PollingPeriod, process.Config.RetryCnt)
 			return ErrTeleportPanic
@@ -521,13 +522,25 @@ func isBadCertificateProblem(e error) bool {
 	return true
 }
 
-// isNotKeysFoundProblem returns whether this error is of no matching keys found
-func isNotKeysFoundProblem(e error) bool {
+// isKeysNotFoundProblem returns whether this error is of no matching keys found
+func isKeysNotFoundProblem(e error) bool {
 	if !strings.Contains(e.Error(), "no matching keys found") {
 		return false
 	}
 
 	return true
+}
+
+// clearDataFolder clears the data folder:
+func (process *TeleportProcess) clearDataFolder() error {
+	err := os.RemoveAll(process.Config.Auth.StorageConfig.Params["data_dir"].(string))
+	if err != nil {
+		log.Error("failed removing Teleport data directory", err)
+		return err
+	}
+
+	log.Debugln("[clearDataFolder] clean up data directory")
+	return nil
 }
 
 // syncRotationCycle executes a rotation cycle that returns:
