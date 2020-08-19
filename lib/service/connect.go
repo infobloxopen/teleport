@@ -532,15 +532,22 @@ func isKeysNotFoundProblem(e error) bool {
 }
 
 // clearDataFolder clears the data folder:
-func (process *TeleportProcess) clearDataFolder() error {
-	err := os.RemoveAll(process.Config.Auth.StorageConfig.Params["data_dir"].(string))
-	if err != nil {
-		log.Error("failed removing Teleport data directory", err)
-		return err
+func (process *TeleportProcess) clearDataFolder() {
+	if dir, ok := process.Config.Auth.StorageConfig.Params["data_dir"]; ok {
+		if strDir, ok := dir.(string); ok {
+			err := os.RemoveAll(strDir)
+			if err != nil {
+				log.Errorf("failed removing Teleport data directory: %v", err)
+				return
+			}
+
+			log.Debugln("[clearDataFolder] clean up data directory")
+			return
+		}
 	}
 
-	log.Debugln("[clearDataFolder] clean up data directory")
-	return nil
+	log.Debugln("[clearDataFolder] failed Teleport data directory, data dir is empty")
+	return
 }
 
 // syncRotationCycle executes a rotation cycle that returns:
