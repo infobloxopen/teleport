@@ -160,6 +160,10 @@ func dialProxy(ctx context.Context, proxyURL, cloudProxyURL *url.URL, addr strin
 		var d net.Dialer
 		conn, err = d.DialContext(ctx, "tcp", proxyURL.Host)
 	}
+	if err != nil {
+		log.Warnf("Unable to dial to proxy: %v: %v.", proxyURL, err)
+		return nil, trace.ConvertSystemError(err)
+	}
 
 	var targetAddr string
 	if cloudProxyURL == nil {
@@ -227,15 +231,10 @@ func dialCloudProxy(ctx context.Context, conn net.Conn, cloudProxyURL *url.URL, 
 		var d net.Dialer
 		conn, err = d.DialContext(ctx, "tcp", cloudProxyURL.Host)
 	}
-
-	// doing one more hop over the existing connection to proxy
-	connectReq := &http.Request{
-		Method: http.MethodConnect,
-		URL:    &url.URL{Opaque: addr},
-		Host:   addr,
-		Header: make(http.Header),
+	if err != nil {
+		log.Warnf("Unable to dial to cloud proxy: %v: %v.", cloudProxyURL, err)
+		return nil, trace.ConvertSystemError(err)
 	}
-
 	// if cloud proxy has https scheme, need to update connect till tls
 	if cloudProxyURL.Scheme == "https" {
 		tlsConn := tls.Client(conn, &tls.Config{
@@ -243,6 +242,14 @@ func dialCloudProxy(ctx context.Context, conn net.Conn, cloudProxyURL *url.URL, 
 		})
 
 		conn = tlsConn
+	}
+
+	// doing one more hop over the existing connection to proxy
+	connectReq := &http.Request{
+		Method: http.MethodConnect,
+		URL:    &url.URL{Opaque: addr},
+		Host:   addr,
+		Header: make(http.Header),
 	}
 
 	err = connectReq.Write(conn)
